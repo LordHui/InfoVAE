@@ -1,6 +1,5 @@
 import tensorflow as tf
 import numpy as np
-from matplotlib import pyplot as plt
 import math, os, time
 import subprocess
 import argparse
@@ -16,6 +15,9 @@ parser.add_argument('-r', '--reg_type', type=str, default='elbo_anneal', help='T
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-n', '--train_size', type=int, default=50000, help='Number of samples for training')
 args = parser.parse_args()
+
+
+# python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
 
 
 reg_type = args.reg_type
@@ -229,7 +231,7 @@ for i in range(100000):
         logger.add_item('zlogdet_train', compute_z_logdet(is_train=True))
         logger.add_item('zlogdet_test', compute_z_logdet(is_train=False))
         logger.flush()
-    if i % 200 == 0:
+    if i % 1000 == 0:
         samples, sample_stddev = sess.run([gen_xmean, gen_xstddev], feed_dict={gen_z: np.random.normal(size=(100, z_dim))})
         plots = np.stack([convert_to_display(samples), convert_to_display(sample_stddev),
                           convert_to_display(xmean), convert_to_display(xstddev)], axis=0)

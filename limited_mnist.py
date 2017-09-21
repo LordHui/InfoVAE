@@ -1,6 +1,7 @@
 from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
-from matplotlib import pyplot as plt
+
+
 
 
 # Train on limited data
@@ -26,6 +27,7 @@ class LimitedMnist:
 
 
 if __name__ == '__main__':
+    from matplotlib import pyplot as plt
     limited_mnist = LimitedMnist(200)
     while True:
         image_x = limited_mnist.next_batch(150).reshape([-1, 28, 28])
