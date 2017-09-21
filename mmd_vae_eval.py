@@ -2,17 +2,17 @@ import tensorflow as tf
 import numpy as np
 from matplotlib import pyplot as plt
 import math, os, time
-from tensorflow.examples.tutorials.mnist import input_data
 import subprocess
 import argparse
 from scipy import misc as misc
 from logger import *
+from limited_mnist import LimitedMnist
 
 
 parser = argparse.ArgumentParser()
 # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
 
-parser.add_argument('-r', '--reg_type', type=str, default='anneal', help='Type of regularization')
+parser.add_argument('-r', '--reg_type', type=str, default='elbo_anneal', help='Type of regularization')
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-n', '--train_size', type=int, default=50000, help='Number of samples for training')
 args = parser.parse_args()
@@ -159,7 +159,7 @@ if reg_type == 'mmd':
     loss_all = loss_nll + 50 * loss_mmd
 elif reg_type == 'elbo':
     loss_all = loss_nll + loss_elbo
-elif reg_type == 'anneal':
+elif reg_type == 'elbo_anneal':
     loss_all = loss_nll + loss_elbo * reg_coeff
 else:
     print("Unknown type")
@@ -168,26 +168,8 @@ else:
 trainer = tf.train.AdamOptimizer(1e-4).minimize(loss_all)
 logger = RunningAvgLogger(os.path.join(log_path, 'log.txt'), max_step=50)
 
-
-# Train on limited data
-class LimitedMnist:
-    def __init__(self, mnist, size):
-        self.data_ptr = 0
-        self.size = size
-        assert size <= mnist.train.images.shape[0]
-        self.data = mnist.train.images[:size]
-
-    def next_batch(self, batch_size):
-        prev_ptr = self.data_ptr
-        self.data_ptr += batch_size
-        if self.data_ptr > self.size:
-            prev_ptr = 0
-            self.data_ptr = batch_size
-        return self.data[prev_ptr:self.data_ptr]
-
-
-mnist = input_data.read_data_sets('mnist_data')
-limited_mnist = LimitedMnist(mnist, train_size)
+limited_mnist = LimitedMnist(train_size)
+full_mnist = limited_mnist.full_mnist
 
 
 # Convert a numpy array of shape [batch_size, height, width, 1] into a displayable array
@@ -210,7 +192,7 @@ def compute_z_logdet(is_train=True):
         if is_train:
             batch_x = limited_mnist.next_batch(batch_size)
         else:
-            batch_x, _ = mnist.test.next_batch(batch_size)
+            batch_x, _ = full_mnist.test.next_batch(batch_size)
         batch_x = np.reshape(batch_x, [-1]+x_dim)
         z = sess.run(train_z, feed_dict={train_x: batch_x})
         z_list.append(z)
@@ -270,7 +252,7 @@ for i in range(50):
         batch_x = limited_mnist.next_batch(batch_size)
         run_name = '%s-%d-train' % (reg_type, train_size)
     else:
-        batch_x, _ = mnist.test.next_batch(batch_size)
+        batch_x, _ = full_mnist.test.next_batch(batch_size)
         run_name = '%s-%d-test' % (reg_type, train_size)
     batch_x = np.reshape(batch_x, [-1] + x_dim)
     nll_list = []
