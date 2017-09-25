@@ -84,7 +84,7 @@ def encoder(x, z_dim):
         fc1 = fc_lrelu(conv2, 1024)
         mean = tf.contrib.layers.fully_connected(fc1, z_dim, activation_fn=tf.identity)
         stddev = tf.contrib.layers.fully_connected(fc1, z_dim, activation_fn=tf.sigmoid)
-        stddev = tf.maximum(stddev, 0.005)
+        stddev = tf.maximum(stddev, 0.1)
         return mean, stddev
 
 
@@ -98,7 +98,7 @@ def decoder(z, reuse=False):
         conv1 = conv2d_t_relu(fc2, 64, 4, 2)
         mean = tf.contrib.layers.convolution2d_transpose(conv1, 1, 4, 2, activation_fn=tf.sigmoid)
         stddev = tf.contrib.layers.convolution2d_transpose(conv1, 1, 4, 2, activation_fn=tf.sigmoid)
-        stddev = tf.maximum(stddev, 0.005)
+        stddev = tf.maximum(stddev, 0.1)
         return mean, stddev
 
 
