@@ -162,12 +162,11 @@ def compute_true_nll():
         batch_x, _ = mog.sample(batch_size)
         batch_x = batch_x.reshape(-1, x_dim)
         nll_list = []
-        num_iter = args.nll_iter
-        for k in range(num_iter):
+        for k in range(args.nll_iter):
             random_z = np.random.normal(size=[batch_size, z_dim])
             nll = sess.run(sample_nll, feed_dict={train_x: batch_x, gen_z: random_z})
             nll_list.append(nll)
-            if k % 50 == 0:
+            if k % 5000 == 0:
                 print("iter %d, current value %.4f, time used %.2f" % (k, compute_log_sum(np.stack(nll_list)), time.time() - start_time))
         nll = compute_log_sum(np.stack(nll_list))
         avg_nll.append(nll)

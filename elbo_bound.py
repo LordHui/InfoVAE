@@ -5,11 +5,11 @@ from matplotlib import pyplot as plt
 
 
 class MoG:
-    def __init__(self, centers=None, stddev=0.00001):
+    def __init__(self, centers=None, stddev=0.4):
         if centers is not None:
             self.centers = np.array(centers)
         else:
-            self.centers = np.array([-1.0, 0.0, 1.0])
+            self.centers = np.array([-1.0, 1.0])
         self.stddev = stddev
 
     def sample(self, batch_size):
@@ -80,7 +80,7 @@ def compute_mmd(x, y):
 
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '3'
-reg = 'mmd'
+reg = 'kl'
 x_dim = 1
 z_dim = 1
 
@@ -127,7 +127,7 @@ c_list = np.array(['r', 'g', 'b', 'm'])
 for i in range(10000000):
     batch_x, _ = mog.sample(batch_size)
     batch_x = batch_x.reshape(-1, x_dim)
-    _, nll, kl, mmd = sess.run([trainer, loss_nll, kl_reg, mmd_reg], feed_dict={train_x: batch_x, kl_anneal: 1.0 - math.exp(-i / 20000.0)})
+    _, nll, kl, mmd = sess.run([trainer, loss_nll, kl_reg, mmd_reg], feed_dict={train_x: batch_x, kl_anneal: 0.5 - 0.5 * math.exp(-i / 2000.0)})
     if i % 100 == 0:
         print("Iteration %d: Negative log likelihood is %f, mmd loss is %f, kl loss is %f" % (i, nll, mmd, kl))
     if i % 500 == 0:
