@@ -9,7 +9,7 @@ import subprocess
 import argparse
 
 parser = argparse.ArgumentParser()
-# python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
+# python elbo_mog.py --max_reg=0.5 --nll_bound=-3.0 --gpu=0
 
 parser.add_argument('-m', '--max_reg', type=float, default=1.0, help='Maximum coefficient for KL(q(z|x)||p(z))')
 parser.add_argument('-n', '--nll_bound', type=float, default=-3.0, help='Lower bound on nll')
@@ -229,7 +229,7 @@ for i in range(1, 10000000):
         else:
             plt.scatter(z_samples[:, 0], z_samples[:, 1], c=c_list[np.array(mode_index)], hold=False)
         plt.title('%s: latent code q(z)' % reg)
-        plt.savefig(os.path.join(plot_path, 'latent_code%d.png', i))
+        plt.savefig(os.path.join(plot_path, 'latent_code%d.png' % i))
 
         true_nll = compute_true_nll()
         logger.write('%d %f %f %f %f\n' % (i, nll, kl, mmd, true_nll))
