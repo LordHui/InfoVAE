@@ -81,7 +81,7 @@ def compute_mmd(x, y):
 
 
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 reg = 'kl'
 
 x_dim = 1
