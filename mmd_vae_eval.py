@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-import math, os, time
+import os, time
 import subprocess
 import argparse
 from scipy import misc as misc
@@ -16,6 +16,7 @@ parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-n', '--train_size', type=int, default=20000, help='Number of samples for training')
 parser.add_argument('-m', '--mi', type=float, default=1.0, help='Information Preference')
 parser.add_argument('-s', '--reg_size', type=float, default=50.0, help='Strength of posterior regularization, valid for mmd regularization')
+parser.add_argument('-l', '--ll_eval', type=str, default='is', help='is, sampling or both')
 args = parser.parse_args()
 
 
@@ -248,17 +249,17 @@ def compute_log_sum(val):
 def compute_nll_by_is(batch_x):
     start_time = time.time()
     nll_list = []
-    num_iter = 50000
+    num_iter = 5000
     for k in range(num_iter):
         nll = sess.run(is_nll, feed_dict={train_x: batch_x})
         nll_list.append(nll)
-        if k % 20000 == 0:
+        if k % 2000 == 0:
             print("Iter %d, current value %.4f, time used %.2f" % (
                 k, compute_log_sum(np.stack(nll_list)), time.time() - start_time))
     return compute_log_sum(np.stack(nll_list))
 
 
-def compute_nll_by_sampling():
+def compute_nll_by_sampling(batch_x):
     start_time = time.time()
     nll_list = []
     num_iter = 50000
@@ -283,15 +284,29 @@ for i in range(50):
         batch_x, _ = full_mnist.test.next_batch(batch_size)
         # run_name = '%s-%d-test' % (args.reg_type, args.train_size)
     batch_x = np.reshape(batch_x, [-1] + x_dim)
-    nll = compute_nll_by_is(batch_x)
+
+    if args.ll_eval == 'is':
+        nll = compute_nll_by_is(batch_x)
+    elif args.ll_eval == 'sampling':
+        nll = compute_nll_by_sampling(batch_x)
+    elif args.ll_eval == 'both':
+        nll = compute_nll_by_is(batch_x)
+        nll_sampling = compute_nll_by_sampling(batch_x)
+    else:
+        print("Unknown evaluation method")
+        exit(-1)
     run_name = '%s-%d-test' % (args.reg_type, args.train_size)
     print("%s likelihood importance sampled = %.4f" % (run_name, nll))
     if i % 2 == 0:
         train_avg_nll.append(nll)
         logger.add_item('train_nll', nll)
+        if args.ll_eval == 'both;':
+            logger.add_item('train_nll_sampling', nll)
     else:
         test_avg_nll.append(nll)
         logger.add_item('test_nll', nll)
+        if args.ll_eval == 'both':
+            logger.add_item('test_nll_sampling', nll)
     logger.flush()
 train_nll = np.mean(train_avg_nll)
 test_nll = np.mean(test_avg_nll)
