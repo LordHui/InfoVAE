@@ -14,8 +14,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-r', '--reg_type', type=str, default='elbo_anneal', help='Type of regularization')
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-n', '--train_size', type=int, default=50000, help='Number of samples for training')
-parser.add_argument('-m', '--mi', type=float, default=50.0, help='Information Preference, valid for mmd regularization')
-parser.add_argument('-s', '--reg_size', type=float, default=1.0, help='Strength of posterior regularization')
+parser.add_argument('-m', '--mi', type=float, default=1.0, help='Information Preference')
+parser.add_argument('-s', '--reg_size', type=float, default=50.0, help='Strength of posterior regularization, valid for mmd regularization')
 args = parser.parse_args()
 
 
