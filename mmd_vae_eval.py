@@ -158,7 +158,7 @@ is_nll = loss_elbo_per_sample + loss_nll_per_sample
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
 if args.reg_type == 'mmd':
-    loss_all = loss_nll + args.reg_size * loss_mmd + (1.0 - args.mi) * loss_elbo
+    loss_all = loss_nll + (args.reg_size + args.mi - 1.0) * loss_mmd + (1.0 - args.mi) * loss_elbo
 elif args.reg_type == 'elbo':
     loss_all = loss_nll + (1.0 - args.mi) * loss_elbo
 elif args.reg_type == 'elbo_anneal':
