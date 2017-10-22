@@ -14,14 +14,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-r', '--reg_type', type=str, default='elbo_anneal', help='Type of regularization')
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-n', '--train_size', type=int, default=50000, help='Number of samples for training')
+parser.add_argument('-m', '--mi', type=float, default=50.0, help='Information Preference, valid for mmd regularization')
+parser.add_argument('-s', '--reg_size', type=float, default=1.0, help='Strength of posterior regularization')
 args = parser.parse_args()
 
 
 # python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
-
-
-reg_type = args.reg_type
-train_size = args.train_size
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 batch_size = 200
 
@@ -33,8 +31,7 @@ def make_model_path(name):
     os.makedirs(log_path)
     return log_path
 
-
-log_path = make_model_path('%s_%d' % (reg_type, train_size))
+log_path = make_model_path('%s_%d' % (args.reg_type, args.train_size))
 
 
 # Define some handy network layers
@@ -120,10 +117,6 @@ xstddev_logdet = tf.reduce_mean(tf.reduce_sum(2.0 * tf.log(train_xstddev), axis=
 gen_z = tf.placeholder(tf.float32, shape=[None, z_dim])
 gen_xmean, gen_xstddev = decoder(gen_z, reuse=True)
 
-sample_nll = tf.div(tf.square(train_x - gen_xmean), tf.square(gen_xstddev)) / 2.0 + tf.log(gen_xstddev)
-sample_nll += math.log(2 * np.pi) / 2.0
-sample_nll = tf.reduce_sum(sample_nll, axis=(1, 2, 3))     # negative log likelihood per dimension
-
 
 def compute_kernel(x, y):
     x_size = tf.shape(x)[0]
@@ -146,23 +139,30 @@ true_samples = tf.random_normal(tf.stack([batch_size, z_dim]))
 loss_mmd = compute_mmd(true_samples, train_z)
 
 # ELBO loss divided by input dimensions
-loss_elbo = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) +
-                          0.5 * tf.square(train_zmean) - 0.5, axis=1)
-loss_elbo = tf.reduce_mean(loss_elbo) / np.prod(x_dim)
-loss_elbo_normalized = loss_elbo * np.prod(x_dim) / z_dim
+loss_elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) + 0.5 * tf.square(train_zmean) - 0.5,
+                          axis=1)
+loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 
 # Negative log likelihood per dimension
-loss_nll = tf.div(tf.square(train_x - train_xmean), tf.square(train_xstddev)) / 2.0 + tf.log(train_xstddev)
-loss_nll = tf.reduce_mean(loss_nll)
-loss_nll += math.log(2 * np.pi) / 2.0
+loss_nll_per_sample = tf.reduce_sum(tf.div(tf.square(train_x - train_xmean), tf.square(train_xstddev)) / 2.0 +
+                         tf.log(train_xstddev), axis=(1, 2, 3)) + math.log(2 * np.pi) / 2.0
+loss_nll = tf.reduce_mean(loss_nll_per_sample)
+
+# negative log likelihood measured by sampling
+sample_nll = tf.div(tf.square(train_x - gen_xmean), tf.square(gen_xstddev)) / 2.0 + tf.log(gen_xstddev)
+sample_nll += math.log(2 * np.pi) / 2.0
+sample_nll = tf.reduce_sum(sample_nll, axis=(1, 2, 3))
+
+# negative log likelihood measured by is
+is_nll = loss_elbo_per_sample + loss_nll_per_sample
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
-if reg_type == 'mmd':
-    loss_all = loss_nll + 50 * loss_mmd
-elif reg_type == 'elbo':
-    loss_all = loss_nll + loss_elbo
-elif reg_type == 'elbo_anneal':
-    loss_all = loss_nll + loss_elbo * reg_coeff
+if args.reg_type == 'mmd':
+    loss_all = loss_nll + args.reg_size * loss_mmd + (1.0 - args.mi) * loss_elbo
+elif args.reg_type == 'elbo':
+    loss_all = loss_nll + (1.0 - args.mi) * loss_elbo
+elif args.reg_type == 'elbo_anneal':
+    loss_all = loss_nll + (1.0 - args.mi) * loss_elbo * reg_coeff
 else:
     print("Unknown type")
     exit(-1)
@@ -170,7 +170,7 @@ else:
 trainer = tf.train.AdamOptimizer(1e-4).minimize(loss_all)
 logger = RunningAvgLogger(os.path.join(log_path, 'log.txt'), max_step=50)
 
-limited_mnist = LimitedMnist(train_size)
+limited_mnist = LimitedMnist(args.train_size)
 full_mnist = limited_mnist.full_mnist
 
 
@@ -218,7 +218,7 @@ for i in range(100000):
     else:
         reg_val = 1.0
     _, loss, nll, mmd, elbo, xmean, xstddev, xlogdet, zlogdet = \
-        sess.run([trainer, loss_all, loss_nll, loss_mmd, loss_elbo_normalized, train_xmean, train_xstddev, xstddev_logdet, zstddev_logdet],
+        sess.run([trainer, loss_all, loss_nll, loss_mmd, loss_elbo, train_xmean, train_xstddev, xstddev_logdet, zstddev_logdet],
                  feed_dict={train_x: batch_x, reg_coeff: reg_val})
     logger.add_item('loss', loss)
     logger.add_item('nll', nll)
@@ -231,7 +231,7 @@ for i in range(100000):
         logger.add_item('zlogdet_train', compute_z_logdet(is_train=True))
         logger.add_item('zlogdet_test', compute_z_logdet(is_train=False))
         logger.flush()
-    if i % 1000 == 0:
+    if i % 10000 == 0:
         samples, sample_stddev = sess.run([gen_xmean, gen_xstddev], feed_dict={gen_z: np.random.normal(size=(100, z_dim))})
         plots = np.stack([convert_to_display(samples), convert_to_display(sample_stddev),
                           convert_to_display(xmean), convert_to_display(xstddev)], axis=0)
@@ -245,18 +245,21 @@ def compute_log_sum(val):
     return np.mean(min_val - np.log(np.mean(np.exp(-val + min_val), axis=0)))
 
 
-print("---------------------> Computing true log likelihood")
-start_time = time.time()
-train_avg_nll = []
-test_avg_nll = []
-for i in range(50):
-    if i % 2 == 0:
-        batch_x = limited_mnist.next_batch(batch_size)
-        run_name = '%s-%d-train' % (reg_type, train_size)
-    else:
-        batch_x, _ = full_mnist.test.next_batch(batch_size)
-        run_name = '%s-%d-test' % (reg_type, train_size)
-    batch_x = np.reshape(batch_x, [-1] + x_dim)
+def compute_nll_by_is(batch_x):
+    start_time = time.time()
+    nll_list = []
+    num_iter = 50000
+    for k in range(num_iter):
+        nll = sess.run(is_nll, feed_dict={train_x: batch_x})
+        nll_list.append(nll)
+        if k % 20000 == 0:
+            print("Iter %d, current value %.4f, time used %.2f" % (
+                k, compute_log_sum(np.stack(nll_list)), time.time() - start_time))
+    return compute_log_sum(np.stack(nll_list))
+
+
+def compute_nll_by_sampling():
+    start_time = time.time()
     nll_list = []
     num_iter = 50000
     for k in range(num_iter):
@@ -264,13 +267,28 @@ for i in range(50):
         nll = sess.run(sample_nll, feed_dict={train_x: batch_x, gen_z: random_z})
         nll_list.append(nll)
         if k % 20000 == 0:
-            print("%s: iter %d, current value %.4f, time used %.2f" % (run_name, k, compute_log_sum(np.stack(nll_list)), time.time() - start_time))
-    nll = compute_log_sum(np.stack(nll_list))
-    print("%s likelihood importance sampled = %.4f, time used %.2f" % (run_name, nll, time.time() - start_time))
+            print("Iter %d, current value %.4f, time used %.2f" % (
+                k, compute_log_sum(np.stack(nll_list)), time.time() - start_time))
+    return compute_log_sum(np.stack(nll_list))
 
+
+print("---------------------> Computing true log likelihood")
+train_avg_nll = []
+test_avg_nll = []
+for i in range(50):
+    if i % 2 == 0:
+        batch_x = limited_mnist.next_batch(batch_size)
+        # run_name = '%s-%d-train' % (args.reg_type, args.train_size)
+    else:
+        batch_x, _ = full_mnist.test.next_batch(batch_size)
+        # run_name = '%s-%d-test' % (args.reg_type, args.train_size)
+    batch_x = np.reshape(batch_x, [-1] + x_dim)
+    nll = compute_nll_by_is(batch_x)
+    run_name = '%s-%d-test' % (args.reg_type, args.train_size)
+    print("%s likelihood importance sampled = %.4f" % (run_name, nll))
     if i % 2 == 0:
         train_avg_nll.append(nll)
-        logger.add_item('train_nll',  nll)
+        logger.add_item('train_nll', nll)
     else:
         test_avg_nll.append(nll)
         logger.add_item('test_nll', nll)
@@ -279,4 +297,5 @@ train_nll = np.mean(train_avg_nll)
 test_nll = np.mean(test_avg_nll)
 logger.add_item('train_nll_all', train_nll)
 logger.add_item('test_nll_all', test_nll)
-print("Estimated log likelihood is train %f/test %f, time elapsed %f" % (train_nll, test_nll, time.time() - start_time))
+logger.flush()
+print("Estimated log likelihood is train %f/test %f" % (train_nll, test_nll))
