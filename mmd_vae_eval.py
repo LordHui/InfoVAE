@@ -31,7 +31,7 @@ def make_model_path(name):
     os.makedirs(log_path)
     return log_path
 
-log_path = make_model_path('%s_%d' % (args.reg_type, args.train_size))
+log_path = make_model_path('%s_%d_%.2f_%.2f' % (args.reg_type, args.train_size, args.mi, args.reg_size))
 
 
 # Define some handy network layers
