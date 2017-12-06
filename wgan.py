@@ -7,6 +7,14 @@ from matplotlib import pyplot as plt
 import scipy.misc as misc
 from abstract_network import *
 from dataset import *
+import argparse
+
+parser = argparse.ArgumentParser()
+# python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
+
+parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
+parser.add_argument('-n', '--netname', type=str, default='mnist', help='mnist or cifar')
+args = parser.parse_args()
 
 def lrelu(x, rate=0.1):
     return tf.maximum(tf.minimum(x * rate, 0), x)
@@ -201,19 +209,18 @@ class GenerativeAdversarialNet(object):
 
 if __name__ == '__main__':
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
-    netname = 'celeba_large'
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     dataset = None
-    if 'mnist' in netname:
+    if 'mnist' in args.netname:
         dataset = MnistDataset()
-    elif 'cifar' in netname:
+    elif 'cifar' in args.netname:
         dataset = CifarDataset()
-    elif 'celeba' in netname:
+    elif 'celeba' in args.netname:
         dataset = CelebADataset(db_path='/ssd_data/CelebA')
     else:
         print("unknown dataset")
         exit(-1)
-    c = GenerativeAdversarialNet(dataset, name=netname)
+    c = GenerativeAdversarialNet(dataset, name=args.netname)
     c.train()
 
 
