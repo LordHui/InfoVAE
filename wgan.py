@@ -1,9 +1,10 @@
+import matplotlib
+matplotlib.use('Agg')
 import tensorflow as tf
 import numpy as np
 import time
 import subprocess
 import math, os
-from matplotlib import pyplot as plt
 import scipy.misc as misc
 from abstract_network import *
 from dataset import *
