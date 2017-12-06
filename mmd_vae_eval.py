@@ -140,8 +140,8 @@ true_samples = tf.random_normal(tf.stack([batch_size, z_dim]))
 loss_mmd = compute_mmd(true_samples, train_z)
 
 # ELBO loss divided by input dimensions
-loss_elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) + 0.5 * tf.square(train_zmean) - 0.5,
-                          axis=1)
+loss_elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) +
+                                     0.5 * tf.square(train_zmean) - 0.5, axis=1)
 loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 
 # Negative log likelihood per dimension
@@ -279,10 +279,10 @@ test_avg_nll = []
 for i in range(50):
     if i % 2 == 0:
         batch_x = limited_mnist.next_batch(batch_size)
-        # run_name = '%s-%d-train' % (args.reg_type, args.train_size)
+        run_name = '%s-%d-train' % (args.reg_type, args.train_size)
     else:
         batch_x, _ = full_mnist.test.next_batch(batch_size)
-        # run_name = '%s-%d-test' % (args.reg_type, args.train_size)
+        run_name = '%s-%d-test' % (args.reg_type, args.train_size)
     batch_x = np.reshape(batch_x, [-1] + x_dim)
 
     if args.ll_eval == 'is':
@@ -295,7 +295,7 @@ for i in range(50):
     else:
         print("Unknown evaluation method")
         exit(-1)
-    run_name = '%s-%d-test' % (args.reg_type, args.train_size)
+
     print("%s likelihood importance sampled = %.4f" % (run_name, nll))
     if i % 2 == 0:
         train_avg_nll.append(nll)
