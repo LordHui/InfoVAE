@@ -1,4 +1,4 @@
-from dataset import *
+from .abstract_dataset import *
 
 
 class MoGDataset(Dataset):
