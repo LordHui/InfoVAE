@@ -17,8 +17,10 @@ parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-n', '--netname', type=str, default='mnist', help='mnist or cifar')
 args = parser.parse_args()
 
+
 def lrelu(x, rate=0.1):
     return tf.maximum(tf.minimum(x * rate, 0), x)
+
 
 def conv_discriminator(x, data_dims, reuse=False):
     with tf.variable_scope('d_net') as vs:
@@ -30,6 +32,7 @@ def conv_discriminator(x, data_dims, reuse=False):
         fc1 = fc_lrelu(conv2, 1024)
         fc2 = tf.contrib.layers.fully_connected(fc1, 1, activation_fn=tf.identity)
         return fc2
+
 
 def conv_large_discriminator(x, data_dims, reuse=False):
     with tf.variable_scope('d_net') as vs:
@@ -47,6 +50,7 @@ def conv_large_discriminator(x, data_dims, reuse=False):
         fc3 = tf.contrib.layers.fully_connected(fc2, 1, activation_fn=tf.identity)
         return fc3
 
+
 def mlp_discriminator(x, reuse=False):
     with tf.variable_scope('d_net') as vs:
         if reuse:
@@ -57,6 +61,7 @@ def mlp_discriminator(x, reuse=False):
         fc3 = fc_lrelu(fc2, 1024)
         fc4 = tf.contrib.layers.fully_connected(fc3, 1, activation_fn=tf.identity)
         return fc4
+
 
 def conv_large_generator(z, data_dims, range):
     with tf.variable_scope('g_net') as vs:
@@ -145,15 +150,10 @@ class GenerativeAdversarialNet(object):
         # self.image = tf.summary.image('generated images', self.g, max_images=10)
         self.saver = tf.train.Saver(tf.global_variables())
 
-        self.fig, self.ax = None, None
         self.model_path = "log/%s" % name
         self.fig_path = "%s/fig" % self.model_path
 
     def visualize(self, batch_size, sess, save_idx):
-        if self.fig is None:
-            self.fig, self.ax = plt.subplots()
-        else:
-            self.ax.cla()
         bz = np.random.normal(-1, 1, [batch_size, self.hidden_num]).astype(np.float32)
         image = sess.run(self.g, feed_dict={self.z: bz})
         num_row = int(math.floor(math.sqrt(batch_size)))
@@ -165,12 +165,8 @@ class GenerativeAdversarialNet(object):
 
         if canvas.shape[-1] == 1:
             misc.imsave("%s/%d.png" % (self.fig_path, save_idx), canvas[:, :, 0])
-            self.ax.imshow(canvas[:, :, 0], cmap=plt.get_cmap('Greys'))
         else:
             misc.imsave("%s/%d.png" % (self.fig_path, save_idx), canvas)
-            self.ax.imshow(canvas)
-        plt.draw()
-        plt.pause(0.01)
 
     def train(self):
         with tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
