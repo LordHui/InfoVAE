@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import time
+import os
 import tensorflow as tf
 import matplotlib
 matplotlib.use('Agg')
@@ -15,8 +16,10 @@ parser.add_argument('-m', '--max_reg', type=float, default=1.0, help='Maximum co
 parser.add_argument('-n', '--nll_bound', type=float, default=-3.0, help='Lower bound on nll')
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-i', '--nll_iter', type=int, default=25000, help='Number of iterations for log likelihood evaluation')
+parser.add_argument('-r', '--reg', type=str, default='kl', help='Type of divergence, kl or mmd')
 args = parser.parse_args()
 
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
 # Define some handy network layers
 def lrelu(x, rate=0.1):
@@ -80,10 +83,6 @@ def compute_mmd(x, y):
     return tf.reduce_mean(x_kernel) + tf.reduce_mean(y_kernel) - 2 * tf.reduce_mean(xy_kernel)
 
 
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-reg = 'kl'
-
 x_dim = 1
 z_dim = 1
 
@@ -114,7 +113,7 @@ loss_nll = 0.5 * math.log(2 * math.pi) + tf.log(train_xstddev) + \
 loss_nll = tf.reduce_mean(tf.reduce_sum(loss_nll, axis=1))
 loss_nll = tf.maximum(loss_nll, args.nll_bound)
 
-if reg == 'kl':
+if args.reg == 'kl':
     loss = loss_nll + kl_reg * kl_anneal
 else:
     loss = loss_nll + mmd_reg * 500
@@ -131,7 +130,7 @@ true_ll_summary = tf.summary.scalar('true_nll', true_nll_ph)
 
 
 class MoG:
-    def __init__(self, centers=None, stddev=0.5):
+    def __init__(self, centers=None, stddev=0.00001):
         if centers is not None:
             self.centers = np.array(centers)
         else:
@@ -181,7 +180,7 @@ def make_model_path(name):
     os.makedirs(log_path)
     return log_path
 
-log_path = make_model_path('kl%.2f-%.2f' % (args.max_reg, args.nll_bound))
+log_path = make_model_path('%s%.2f-%.2f' % (args.reg, args.max_reg, args.nll_bound))
 plot_path = os.path.join(log_path, 'plot')
 os.makedirs(plot_path)
 logger = open(os.path.join(log_path, 'log.txt'), 'w')
@@ -218,7 +217,6 @@ for i in range(1, 10000000):
             plt.xlim([-3, 3])
         else:
             plt.scatter(samples[:, 0], samples[:, 1], hold=False)
-        plt.title('%s: model samples p(x)' % reg)
         plt.savefig(os.path.join(plot_path, 'model_sample%d.png' % i))
 
         if z_dim == 1:
@@ -227,7 +225,6 @@ for i in range(1, 10000000):
                 plt.hist(z_samples[indices[:, 0], 0], bins=100, color=c_list[modes], hold=not modes == 0)
         else:
             plt.scatter(z_samples[:, 0], z_samples[:, 1], c=c_list[np.array(mode_index)], hold=False)
-        plt.title('%s: latent code q(z)' % reg)
         plt.savefig(os.path.join(plot_path, 'latent_code%d.png' % i))
 
         true_nll = compute_true_nll()
