@@ -7,6 +7,7 @@ from scipy import misc as misc
 from logger import *
 from limited_mnist import LimitedMnist
 from dataset import *
+from eval_inception import *
 
 parser = argparse.ArgumentParser()
 # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask

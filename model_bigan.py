@@ -9,7 +9,7 @@ import scipy.misc as misc
 from abstract_network import *
 from dataset import *
 import argparse
-from mnist_classifier import *
+from eval_inception import *
 
 parser = argparse.ArgumentParser()
 # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
