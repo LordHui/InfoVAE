@@ -9,13 +9,13 @@ import scipy.misc as misc
 from abstract_network import *
 from dataset import *
 import argparse
+from mnist_classifier import *
 
 parser = argparse.ArgumentParser()
 # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
 
-parser.add_argument('-g', '--gpu', type=str, default='2', help='GPU to use')
-parser.add_argument('-n', '--netname', type=str, default='info_mnist', help='mnist or cifar')
-parser.add_argument('-m', '--info_max', type=bool, default=True, help='True or False')
+parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
+parser.add_argument('-n', '--netname', type=str, default='mnist', help='mnist or cifar')
 args = parser.parse_args()
 
 
@@ -160,7 +160,7 @@ class GenerativeAdversarialNet(object):
         self.i_vars = [var for var in tf.global_variables() if 'i_net' in var.name]
         self.d_train = tf.train.AdamOptimizer(learning_rate=0.0002, beta1=0.5, beta2=0.9).minimize(
             self.d_loss, var_list=self.d_vars)
-        if args.info_max is True:
+        if 'info' in args.netname:
             self.g_train = tf.train.AdamOptimizer(learning_rate=0.0002, beta1=0.5, beta2=0.9).minimize(
                 self.g_loss + self.vmi_loss, var_list=self.g_vars+self.i_vars)
         else:
@@ -177,11 +177,29 @@ class GenerativeAdversarialNet(object):
             tf.summary.scalar('loss', self.loss)
         ])
 
+        self.ce_ph = tf.placeholder(tf.float32)
+        self.norm1_ph = tf.placeholder(tf.float32)
+        self.inception_ph = tf.placeholder(tf.float32)
+        self.eval_summary = tf.summary.merge([
+            tf.summary.scalar('class_ce', self.ce_ph),
+            tf.summary.scalar('norm1', self.norm1_ph),
+            tf.summary.scalar('inception_score', self.inception_ph)
+        ])
+
         # self.image = tf.summary.image('generated images', self.g, max_images=10)
         self.saver = tf.train.Saver(tf.global_variables())
 
         self.model_path = "log/%s" % name
         self.fig_path = "%s/fig" % self.model_path
+        self.make_model_path()
+
+        self.classifier = Classifier()
+
+    def make_model_path(self):
+        if os.path.isdir(self.model_path):
+            subprocess.call(('rm -rf %s' % self.model_path).split())
+        os.makedirs(self.model_path)
+        os.makedirs(self.fig_path)
 
     def visualize(self, batch_size, sess, save_idx):
         bz = np.random.normal(-1, 1, [batch_size, self.z_dim]).astype(np.float32)
@@ -198,12 +216,18 @@ class GenerativeAdversarialNet(object):
         else:
             misc.imsave("%s/%d.png" % (self.fig_path, save_idx), canvas)
 
+    def evaluate(self, batch_size, sess):
+        data_batches = []
+        for i in range(20):
+            bz = np.random.normal(-1, 1, [batch_size, self.z_dim]).astype(np.float32)
+            image = sess.run(self.g, feed_dict={self.z: bz})
+            data_batches.append(image)
+        class_dist = self.classifier.class_dist_score(data_batches)
+        inception = self.classifier.inception_score(data_batches)
+        return class_dist, inception
+
     def train(self):
         with tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
-            if os.path.isdir(self.model_path):
-                subprocess.call(('rm -rf %s' % self.model_path).split())
-            os.makedirs(self.model_path)
-            os.makedirs(self.fig_path)
             summary_writer = tf.summary.FileWriter(self.model_path)
             sess.run(tf.global_variables_initializer())
             batch_size = 64
@@ -214,18 +238,23 @@ class GenerativeAdversarialNet(object):
                 for idx in range(0, batch_idxs):
                     if idx % 500 == 0:
                         self.visualize(batch_size, sess, epoch * 2 + idx / 500)
-
+                    if idx % 100 == 0:
+                        class_dist, inception = self.evaluate(100, sess)
+                        score_summary = sess.run(self.eval_summary, feed_dict={self.ce_ph: class_dist[0],
+                                                                               self.norm1_ph: class_dist[1],
+                                                                               self.inception_ph: inception})
+                        summary_writer.add_summary(score_summary, epoch * batch_idxs + idx)
                     bx = self.dataset.next_batch(batch_size)
                     bz = np.random.normal(-1, 1, [batch_size, self.z_dim]).astype(np.float32)
-                    d_loss, _, d_loss_g, d_loss_x = sess.run([self.d_loss, self.d_train, self.d_loss_g, self.d_loss_x],
-                                                             feed_dict={self.x: bx, self.z: bz})
-                    g_loss, i_loss, _ = sess.run([self.g_loss, self.vmi_loss, self.g_train], feed_dict={self.z: bz})
+                    sess.run([self.d_train, self.g_train], feed_dict={self.x: bx, self.z: bz})
 
-                    merged = sess.run(self.merged, feed_dict={self.x: bx, self.z: bz})
-                    summary_writer.add_summary(merged, epoch * batch_idxs + idx)
-
-                    print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss_x: %.4f, d_loss_g: %.4f, g_loss: %.4f, i_loss: %.4f" \
-                          % (epoch, idx, batch_idxs, time.time() - start_time, d_loss_x, d_loss_g, g_loss, i_loss))
+                    if idx % 10 == 0:
+                        d_loss, d_loss_g, d_loss_x, g_loss, i_loss, merged = \
+                            sess.run([self.d_loss, self.d_loss_g, self.d_loss_x, self.g_loss, self.vmi_loss, self.merged],
+                                     feed_dict={self.x: bx, self.z: bz})
+                        summary_writer.add_summary(merged, epoch * batch_idxs + idx)
+                        print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss_x: %.4f, d_loss_g: %.4f, g_loss: %.4f, i_loss: %.4f" \
+                              % (epoch, idx, batch_idxs, time.time() - start_time, d_loss_x, d_loss_g, g_loss, i_loss))
 
                 save_path = "%s/model" % self.model_path
                 if os.path.isdir(save_path):
