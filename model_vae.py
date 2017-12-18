@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import tensorflow as tf
 import numpy as np
 import os, time
@@ -219,7 +221,6 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mi', type=float, default=0.0, help='Information Preference')
     parser.add_argument('-s', '--reg_size', type=float, default=50.0,
                         help='Strength of posterior regularization, valid for mmd regularization')
-    parser.add_argument('-l', '--ll_eval', type=str, default='is', help='is, sampling or both')
     args = parser.parse_args()
 
     # python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
