@@ -7,69 +7,14 @@ from scipy import misc as misc
 from logger import *
 from limited_mnist import LimitedMnist
 from dataset import *
+from abstract_network import *
 from eval_inception import *
-
-parser = argparse.ArgumentParser()
-# python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
-
-parser.add_argument('-r', '--reg_type', type=str, default='elbo', help='Type of regularization')
-parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
-parser.add_argument('-m', '--mi', type=float, default=0.0, help='Information Preference')
-parser.add_argument('-s', '--reg_size', type=float, default=50.0, help='Strength of posterior regularization, valid for mmd regularization')
-parser.add_argument('-l', '--ll_eval', type=str, default='is', help='is, sampling or both')
-args = parser.parse_args()
-
-
-# python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-batch_size = 200
-
-
-def make_model_path(name):
-    log_path = os.path.join('log', name)
-    if os.path.isdir(log_path):
-        subprocess.call(('rm -rf %s' % log_path).split())
-    os.makedirs(log_path)
-    return log_path
-
-log_path = make_model_path('%s_%.2f_%.2f' % (args.reg_type, args.mi, args.reg_size))
+from eval_ll import *
 
 
 # Define some handy network layers
 def lrelu(x, rate=0.1):
     return tf.maximum(tf.minimum(x * rate, 0), x)
-
-
-def conv2d_lrelu(inputs, num_outputs, kernel_size, stride):
-    conv = tf.contrib.layers.convolution2d(inputs, num_outputs, kernel_size, stride,
-                                           weights_initializer=tf.contrib.layers.xavier_initializer(),
-                                           activation_fn=tf.identity)
-    conv = lrelu(conv)
-    return conv
-
-
-def conv2d_t_relu(inputs, num_outputs, kernel_size, stride):
-    conv = tf.contrib.layers.convolution2d_transpose(inputs, num_outputs, kernel_size, stride,
-                                                     weights_initializer=tf.contrib.layers.xavier_initializer(),
-                                                     activation_fn=tf.identity)
-    conv = tf.nn.relu(conv)
-    return conv
-
-
-def fc_lrelu(inputs, num_outputs):
-    fc = tf.contrib.layers.fully_connected(inputs, num_outputs,
-                                           weights_initializer=tf.contrib.layers.xavier_initializer(),
-                                           activation_fn=tf.identity)
-    fc = lrelu(fc)
-    return fc
-
-
-def fc_relu(inputs, num_outputs):
-    fc = tf.contrib.layers.fully_connected(inputs, num_outputs,
-                                           weights_initializer=tf.contrib.layers.xavier_initializer(),
-                                           activation_fn=tf.identity)
-    fc = tf.nn.relu(fc)
-    return fc
 
 
 # Encoder and decoder use the DC-GAN architecture
@@ -98,21 +43,6 @@ def decoder(z, reuse=False):
         return mean
 
 
-# Build the computation graph for training
-z_dim = 20
-x_dim = [28, 28, 1]
-train_x = tf.placeholder(tf.float32, shape=[None]+x_dim)
-train_zmean, train_zstddev = encoder(train_x, z_dim)
-train_z = train_zmean + tf.multiply(train_zstddev,
-                                    tf.random_normal(tf.stack([tf.shape(train_x)[0], z_dim])))
-zstddev_logdet = tf.reduce_mean(tf.reduce_sum(2.0 * tf.log(train_zstddev), axis=1))
-
-train_xmean = decoder(train_z)
-
-# Build the computation graph for generating samples
-gen_z = tf.placeholder(tf.float32, shape=[None, z_dim])
-gen_xmean = decoder(gen_z, reuse=True)
-
 def compute_kernel(x, y):
     x_size = tf.shape(x)[0]
     y_size = tf.shape(y)[0]
@@ -129,96 +59,174 @@ def compute_mmd(x, y):   # [batch_size, z_dim] [batch_size, z_dim]
     return tf.reduce_mean(x_kernel) + tf.reduce_mean(y_kernel) - 2 * tf.reduce_mean(xy_kernel)
 
 
-# Compare the generated z with true samples from a standard Gaussian, and compute their MMD distance
-true_samples = tf.random_normal(tf.stack([batch_size, z_dim]))
-loss_mmd = compute_mmd(true_samples, train_z)
+class VAE:
+    def __init__(self, dataset, name='vae', reg_type='elbo'):
+        self.name = name
+        self.dataset = dataset
+        self.data_dims = dataset.data_dims
+        self.z_dim = 10
+        self.batch_size = 100
 
-# ELBO loss divided by input dimensions
-loss_elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) +
-                                     0.5 * tf.square(train_zmean) - 0.5, axis=1)
-loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
+        self.train_x = tf.placeholder(tf.float32, shape=[None] + self.data_dims)
 
-# Negative log likelihood per dimension
-loss_nll_per_sample = -tf.reduce_sum(tf.log(train_xmean) * train_x + tf.log(1 - train_xmean) * (1 - train_x), axis=(1, 2, 3))
-loss_nll = tf.reduce_mean(loss_nll_per_sample)
+        # Build the computation graph for training
+        train_zmean, train_zstddev = encoder(self.train_x, self.z_dim)
+        train_z = train_zmean + tf.multiply(train_zstddev,
+                                            tf.random_normal(tf.stack([tf.shape(self.train_x)[0], self.z_dim])))
+        train_xmean = decoder(train_z)
 
+        # Build the computation graph for generating samples
+        self.gen_z = tf.placeholder(tf.float32, shape=[None, self.z_dim])
+        self.gen_xmean = decoder(self.gen_z, reuse=True)
 
-reg_coeff = tf.placeholder(tf.float32, shape=[])
-if args.reg_type == 'mmd':
-    loss_all = loss_nll + (args.reg_size + args.mi - 1.0) * loss_mmd + (1.0 - args.mi) * loss_elbo
-elif args.reg_type == 'elbo':
-    loss_all = loss_nll + (1.0 - args.mi) * loss_elbo
-elif args.reg_type == 'elbo_anneal':
-    loss_all = loss_nll + (1.0 - args.mi) * loss_elbo * reg_coeff
-else:
-    print("Unknown type")
-    exit(-1)
+        # Compare the generated z with true samples from a standard Gaussian, and compute their MMD distance
+        true_samples = tf.random_normal(tf.stack([self.batch_size, self.z_dim]))
+        self.loss_mmd = compute_mmd(true_samples, train_z)
 
-trainer = tf.train.AdamOptimizer(4e-5).minimize(loss_all)
-logger = RunningAvgLogger(os.path.join(log_path, 'log.txt'), max_step=50)
+        # ELBO loss divided by input dimensions
+        elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) +
+                                             0.5 * tf.square(train_zmean) - 0.5, axis=1)
+        self.loss_elbo = tf.reduce_mean(elbo_per_sample)
 
-mnist = MnistDataset(binary=True)
+        # Negative log likelihood per dimension
+        nll_per_sample = -tf.reduce_sum(tf.log(train_xmean) * self.train_x + tf.log(1 - train_xmean) * (1 - self.train_x),
+                                             axis=(1, 2, 3))
+        self.loss_nll = tf.reduce_mean(nll_per_sample)
 
-# Convert a numpy array of shape [batch_size, height, width, 1] into a displayable array
-# of shape [height*sqrt(batch_size, width*sqrt(batch_size))] by tiling the images
-def convert_to_display(samples, max_samples=100):
-    if max_samples > samples.shape[0]:
-        max_samples = samples.shape[0]
-    cnt, height, width = int(math.floor(math.sqrt(max_samples))), samples.shape[1], samples.shape[2]
-    samples = samples[:cnt*cnt]
-    samples = np.transpose(samples, axes=[1, 0, 2, 3])
-    samples = np.reshape(samples, [height, cnt, cnt, width])
-    samples = np.transpose(samples, axes=[1, 0, 2, 3])
-    samples = np.reshape(samples, [height*cnt, width*cnt])
-    return samples
-
-
-def compute_z_logdet(is_train=True):
-    z_list = []
-    for k in range(50):
-        if is_train:
-            batch_x = mnist.next_batch(batch_size)
+        self.reg_coeff = tf.placeholder(tf.float32, shape=[])
+        if reg_type == 'mmd':
+            loss_all = self.loss_nll + (args.reg_size + args.mi - 1.0) * self.loss_mmd + (1.0 - args.mi) * self.loss_elbo
+        elif reg_type == 'elbo':
+            loss_all = self.loss_nll + (1.0 - args.mi) * self.loss_elbo
+        elif reg_type == 'elbo_anneal':
+            loss_all = self.loss_nll + (1.0 - args.mi) * self.loss_elbo * self.reg_coeff
         else:
-            batch_x = mnist.next_test_batch(batch_size)
-        batch_x = np.reshape(batch_x, [-1]+x_dim)
-        z = sess.run(train_z, feed_dict={train_x: batch_x})
-        z_list.append(z)
-    z_list = np.concatenate(z_list, axis=0)
-    cov = np.cov(z_list.T)
-    sign, logdet = np.linalg.slogdet(cov)
-    return logdet
+            loss_all = None
+            print("Unknown type")
+            exit(-1)
+
+        self.trainer = tf.train.AdamOptimizer(4e-5).minimize(loss_all)
+
+        self.train_summary = tf.summary.merge([
+            tf.summary.scalar('elbo', self.loss_elbo),
+            tf.summary.scalar('nll', self.loss_nll),
+            tf.summary.scalar('mmd', self.loss_mmd),
+            tf.summary.scalar('loss', loss_all)
+        ])
+
+        self.ce_ph = tf.placeholder(tf.float32)
+        self.norm1_ph = tf.placeholder(tf.float32)
+        self.inception_ph = tf.placeholder(tf.float32)
+        self.eval_summary = tf.summary.merge([
+            tf.summary.scalar('class_ce', self.ce_ph),
+            tf.summary.scalar('norm1', self.norm1_ph),
+            tf.summary.scalar('inception_score', self.inception_ph)
+        ])
+
+        self.train_nll_ph = tf.placeholder(tf.float32)
+        self.test_nll_ph = tf.placeholder(tf.float32)
+        self.ll_summary = tf.summary.merge([
+            tf.summary.scalar('train_nll', self.train_nll_ph),
+            tf.summary.scalar('test_nll', self.test_nll_ph)
+        ])
+
+        self.log_path, self.fig_path = self.make_model_path()
+
+        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True), allow_soft_placement=True))
+        self.sess.run(tf.global_variables_initializer())
+        self.summary_writer = tf.summary.FileWriter(self.log_path)
+
+        self.inception_evaluator = Classifier()
+        self.ll_evaluator = LLEvaluator(self, calibrate=True)
+
+    def get_generator(self, z):
+        x_sample = decoder(z, reuse=True)
+        return x_sample
+
+    def make_model_path(self):
+        log_path = os.path.join('log', self.name)
+        if os.path.isdir(log_path):
+            subprocess.call(('rm -rf %s' % log_path).split())
+        os.makedirs(log_path)
+        fig_path = "%s/fig" % log_path
+        os.makedirs(fig_path)
+        return log_path, fig_path
+
+    def visualize(self, save_idx):
+        samples_mean = self.sess.run(self.gen_xmean, feed_dict={self.gen_z: np.random.normal(size=(100, self.z_dim))})
+        plots = convert_to_display(samples_mean)
+        misc.imsave(os.path.join(self.fig_path, 'samples%d.png' % save_idx), plots)
+
+    def evaluate_inception(self):
+        data_batches = []
+        for i in range(20):
+            bz = np.random.normal(-1, 1, [self.batch_size, self.z_dim]).astype(np.float32)
+            image = self.sess.run(self.gen_xmean, feed_dict={self.gen_z: bz})
+            data_batches.append(image)
+        class_dist = self.inception_evaluator.class_dist_score(data_batches)
+        inception = self.inception_evaluator.inception_score(data_batches)
+        return class_dist, inception
+
+    def evaluate_ll(self):
+        self.ll_evaluator.train()
+        train_nll, test_nll = self.ll_evaluator.compute_ll(num_batch=10)
+        return train_nll, test_nll
+
+    def train(self):
+        start_time = time.time()
+        for iter in range(1, 1000000):
+            if iter % 1000 == 0:
+                train_nll, test_nll = self.evaluate_ll()
+                print("Negative log likelihood = %.4f/%.4f" % (train_nll, test_nll))
+                ll_summary = self.sess.run(self.ll_summary, feed_dict={self.train_nll_ph: train_nll,
+                                                                       self.test_nll_ph: test_nll})
+                self.summary_writer.add_summary(ll_summary,  iter)
+
+            if iter % 500 == 0:
+                self.visualize(iter)
+
+            if iter % 100 == 0:
+                class_dist, inception = self.evaluate_inception()
+                score_summary = self.sess.run(self.eval_summary, feed_dict={self.ce_ph: class_dist[0],
+                                                                       self.norm1_ph: class_dist[1],
+                                                                       self.inception_ph: inception})
+                self.summary_writer.add_summary(score_summary, iter)
+
+            bx = self.dataset.next_batch(self.batch_size)
+            if iter < 10000:
+                reg_val = 0.01
+            else:
+                reg_val = 1.0
+            _, nll, mmd, elbo = \
+                self.sess.run([self.trainer, self.loss_nll, self.loss_mmd, self.loss_elbo],
+                              feed_dict={self.train_x: bx, self.reg_coeff: reg_val})
+
+            if iter % 1000 == 0:
+                print("Iteration %d, time: %4.4f, nll %.4f, mmd %.4f, elbo %.4f" %
+                      (i, time.time() - start_time, nll, mmd, elbo))
+
+            if iter % 100 == 0:
+                merged = self.sess.run(self.train_summary, feed_dict={self.train_x: bx})
+                self.summary_writer.add_summary(merged, iter)
 
 
-gpu_options = tf.GPUOptions(allow_growth=True)
-sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
-sess.run(tf.global_variables_initializer())
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
 
-# Start training
-# plt.ion()
-for i in range(100000):
-    batch_x = mnist.next_batch(batch_size)
-    batch_x = np.reshape(batch_x, [-1] + x_dim)
-    if i < 20000:
-        reg_val = 0.01
-    else:
-        reg_val = 1.0
-    _, loss, nll, mmd, elbo, xmean, zlogdet = \
-        sess.run([trainer, loss_all, loss_nll, loss_mmd, loss_elbo, train_xmean, zstddev_logdet],
-                 feed_dict={train_x: batch_x, reg_coeff: reg_val})
-    logger.add_item('loss', loss)
-    logger.add_item('nll', nll)
-    logger.add_item('mmd', mmd)
-    logger.add_item('elbo', elbo)
-    logger.add_item('zlogdet', zlogdet)
-    if i % 100 == 0:
-        print("Iteration %d, nll %.4f, mmd loss %.4f, elbo loss %.4f, zlogdet %f" % (i, nll, mmd, elbo, zlogdet))
-        logger.add_item('zlogdet_train', compute_z_logdet(is_train=True))
-        logger.add_item('zlogdet_test', compute_z_logdet(is_train=False))
-        logger.flush()
-    if i % 250 == 0:
-        samples_mean = sess.run(gen_xmean, feed_dict={gen_z: np.random.normal(size=(100, z_dim))})
-        plots = np.stack([convert_to_display(samples_mean), convert_to_display(np.rint(samples_mean)),
-                          convert_to_display(xmean), convert_to_display(np.rint(xmean))], axis=0)
-        plots = np.expand_dims(plots, axis=-1)
-        plots = convert_to_display(plots)
-        misc.imsave(os.path.join(log_path, 'samples%d.png' % i), plots)
+    parser.add_argument('-r', '--reg_type', type=str, default='elbo', help='Type of regularization')
+    parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
+    parser.add_argument('-m', '--mi', type=float, default=0.0, help='Information Preference')
+    parser.add_argument('-s', '--reg_size', type=float, default=50.0,
+                        help='Strength of posterior regularization, valid for mmd regularization')
+    parser.add_argument('-l', '--ll_eval', type=str, default='is', help='is, sampling or both')
+    args = parser.parse_args()
+
+    # python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+
+    dataset = MnistDataset(binary=True)
+    name = '%s_%.2f_%.2f' % (args.reg_type, args.mi, args.reg_size)
+
+    c = VAE(dataset, name)
+    c.train()

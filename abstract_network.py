@@ -43,6 +43,13 @@ def conv2d_t_bn_relu(inputs, num_outputs, kernel_size, stride):
     conv = tf.nn.relu(conv)
     return conv
 
+def conv2d_t_relu(inputs, num_outputs, kernel_size, stride):
+    conv = tf.contrib.layers.convolution2d_transpose(inputs, num_outputs, kernel_size, stride,
+                                                     weights_initializer=tf.random_normal_initializer(stddev=0.02),
+                                                     weights_regularizer=tf.contrib.layers.l2_regularizer(2.5e-5),
+                                                     activation_fn=tf.identity)
+    conv = tf.nn.relu(conv)
+    return conv
 
 def conv2d_t_bn_lrelu(inputs, num_outputs, kernel_size, stride):
     conv = tf.contrib.layers.convolution2d_transpose(inputs, num_outputs, kernel_size, stride,
@@ -96,6 +103,28 @@ def fc_bn_relu(inputs, num_outputs):
     fc = tf.contrib.layers.batch_norm(fc)
     fc = tf.nn.relu(fc)
     return fc
+
+def fc_relu(inputs, num_outputs):
+    fc = tf.contrib.layers.fully_connected(inputs, num_outputs,
+                                           weights_initializer=tf.random_normal_initializer(stddev=0.02),
+                                           weights_regularizer=tf.contrib.layers.l2_regularizer(2.5e-5),
+                                           activation_fn=tf.identity)
+    fc = tf.nn.relu(fc)
+    return fc
+
+
+# Convert a numpy array of shape [batch_size, height, width, 1] into a displayable array
+# of shape [height*sqrt(batch_size, width*sqrt(batch_size))] by tiling the images
+def convert_to_display(samples, max_samples=100):
+    if max_samples > samples.shape[0]:
+        max_samples = samples.shape[0]
+    cnt, height, width = int(math.floor(math.sqrt(max_samples))), samples.shape[1], samples.shape[2]
+    samples = samples[:cnt*cnt]
+    samples = np.transpose(samples, axes=[1, 0, 2, 3])
+    samples = np.reshape(samples, [height, cnt, cnt, width])
+    samples = np.transpose(samples, axes=[1, 0, 2, 3])
+    samples = np.reshape(samples, [height*cnt, width*cnt])
+    return samples
 
 
 class Network:

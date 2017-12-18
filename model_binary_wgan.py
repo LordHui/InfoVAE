@@ -58,7 +58,7 @@ class GenerativeAdversarialNet(object):
     def __init__(self, dataset, name="gan"):
         self.dataset = dataset
         self.data_dims = dataset.data_dims
-        print(self.data_dims)
+        self.batch_size = 100
         self.z_dim = 10
         self.z = tf.placeholder(tf.float32, [None, self.z_dim])
         self.x = tf.placeholder(tf.float32, [None] + self.data_dims)
@@ -105,7 +105,7 @@ class GenerativeAdversarialNet(object):
         # self.d_gradient_ = tf.gradients(self.d_loss_g, self.g)[0]
         # self.d_gradient = tf.gradients(self.d_logits, self.x)[0]
 
-        self.merged = tf.summary.merge([
+        self.train_summary = tf.summary.merge([
             tf.summary.scalar('g_loss', self.g_loss),
             tf.summary.scalar('vmi_loss', self.vmi_loss),
             tf.summary.scalar('d_loss_x', self.d_loss_x),
@@ -122,6 +122,13 @@ class GenerativeAdversarialNet(object):
             tf.summary.scalar('inception_score', self.inception_ph)
         ])
 
+        self.train_nll_ph = tf.placeholder(tf.float32)
+        self.test_nll_ph = tf.placeholder(tf.float32)
+        self.ll_summary = tf.summary.merge([
+            tf.summary.scalar('train_nll', self.train_nll_ph),
+            tf.summary.scalar('test_nll', self.test_nll_ph)
+        ])
+
         # self.image = tf.summary.image('generated images', self.g, max_images=10)
         self.saver = tf.train.Saver(tf.global_variables())
 
@@ -129,13 +136,11 @@ class GenerativeAdversarialNet(object):
         self.fig_path = "%s/fig" % self.model_path
         self.make_model_path()
 
-        self.classifier = Classifier()
-
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True)))
         self.sess.run(tf.global_variables_initializer())
         self.summary_writer = tf.summary.FileWriter(self.model_path)
-        self.batch_size = 100
 
+        self.classifier = Classifier()
         self.ll_evaluator = LLEvaluator(self, calibrate=True)
 
     def get_generator(self, z):
@@ -151,13 +156,7 @@ class GenerativeAdversarialNet(object):
     def visualize(self, save_idx):
         bz = np.random.normal(-1, 1, [self.batch_size, self.z_dim]).astype(np.float32)
         image = self.sess.run(self.g, feed_dict={self.z: bz})
-        num_row = int(math.floor(math.sqrt(self.batch_size)))
-        canvas = np.zeros((self.data_dims[0]*num_row, self.data_dims[1]*num_row, self.data_dims[2]))
-        for i in range(num_row):
-            for j in range(num_row):
-                canvas[i*self.data_dims[0]:(i+1)*self.data_dims[0], j*self.data_dims[1]:(j+1)*self.data_dims[1], :] = \
-                    image[i*num_row+j, :, :, :]
-
+        canvas = convert_to_display(image)
         if canvas.shape[-1] == 1:
             misc.imsave("%s/%d.png" % (self.fig_path, save_idx), canvas[:, :, 0])
         else:
@@ -178,40 +177,47 @@ class GenerativeAdversarialNet(object):
         train_nll, test_nll = self.ll_evaluator.compute_ll(num_batch=10)
         return train_nll, test_nll
 
-    def train(self, num_epochs=1000):
+    def train(self):
         start_time = time.time()
-        for epoch in range(1, num_epochs):
-            if epoch % 10 == 0:
+        for iter in range(1, 1000000):
+            if iter % 1000 == 0:
                 train_nll, test_nll = self.evaluate_ll()
                 print("Negative log likelihood = %.4f/%.4f" % (train_nll, test_nll))
+                ll_summary = self.sess.run(self.ll_summary, feed_dict={self.train_nll_ph: train_nll,
+                                                                       self.test_nll_ph: test_nll})
+                self.summary_writer.add_summary(ll_summary,  iter)
 
-            batch_idxs = 1093
-            for idx in range(0, batch_idxs):
-                if idx % 500 == 0:
-                    self.visualize(epoch * 2 + idx / 500)
-                if idx % 100 == 0:
-                    class_dist, inception = self.evaluate_inception()
-                    score_summary = self.sess.run(self.eval_summary, feed_dict={self.ce_ph: class_dist[0],
-                                                                           self.norm1_ph: class_dist[1],
-                                                                           self.inception_ph: inception})
-                    self.summary_writer.add_summary(score_summary, epoch * batch_idxs + idx)
-                bx = self.dataset.next_batch(self.batch_size)
-                bz = np.random.normal(-1, 1, [self.batch_size, self.z_dim]).astype(np.float32)
-                self.sess.run([self.d_train, self.g_train], feed_dict={self.x: bx, self.z: bz})
+            if iter % 500 == 0:
+                self.visualize(iter)
 
-                if idx % 100 == 0:
-                    d_loss, d_loss_g, d_loss_x, g_loss, i_loss, merged = \
-                        self.sess.run([self.d_loss, self.d_loss_g, self.d_loss_x, self.g_loss, self.vmi_loss, self.merged],
-                                 feed_dict={self.x: bx, self.z: bz})
-                    self.summary_writer.add_summary(merged, epoch * batch_idxs + idx)
-                    print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss_x: %.4f, d_loss_g: %.4f, g_loss: %.4f, i_loss: %.4f" \
-                          % (epoch, idx, batch_idxs, time.time() - start_time, d_loss_x, d_loss_g, g_loss, i_loss))
+            if iter % 100 == 0:
+                class_dist, inception = self.evaluate_inception()
+                score_summary = self.sess.run(self.eval_summary, feed_dict={self.ce_ph: class_dist[0],
+                                                                       self.norm1_ph: class_dist[1],
+                                                                       self.inception_ph: inception})
+                self.summary_writer.add_summary(score_summary, iter)
 
-            save_path = "%s/model" % self.model_path
-            if os.path.isdir(save_path):
-                subprocess.call(('rm -rf %s' % save_path).split())
-            os.makedirs(save_path)
-            self.saver.save(self.sess, save_path, global_step=epoch)
+            bx = self.dataset.next_batch(self.batch_size)
+            bz = np.random.normal(-1, 1, [self.batch_size, self.z_dim]).astype(np.float32)
+            self.sess.run([self.d_train, self.g_train], feed_dict={self.x: bx, self.z: bz})
+
+            if iter % 1000 == 0:
+                d_loss, d_loss_g, d_loss_x, g_loss, i_loss, merged = \
+                    self.sess.run([self.d_loss, self.d_loss_g, self.d_loss_x, self.g_loss, self.vmi_loss, self.train_summary],
+                                  feed_dict={self.x: bx, self.z: bz})
+                print("Iteration %d time: %4.4f, d_loss_x: %.4f, d_loss_g: %.4f, g_loss: %.4f, i_loss: %.4f" \
+                      % (iter, time.time() - start_time, d_loss_x, d_loss_g, g_loss, i_loss))
+
+            if iter % 100 == 0:
+                merged = self.sess.run(self.train_summary, feed_dict={self.x: bx, self.z: bz})
+                self.summary_writer.add_summary(merged, iter)
+
+            if iter % 10000 == 0:
+                save_path = "%s/model" % self.model_path
+                if os.path.isdir(save_path):
+                    subprocess.call(('rm -rf %s' % save_path).split())
+                os.makedirs(save_path)
+                self.saver.save(self.sess, save_path, global_step=iter//10000)
 
 
 if __name__ == '__main__':
@@ -222,7 +228,7 @@ if __name__ == '__main__':
     # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
 
     parser.add_argument('-g', '--gpu', type=str, default='2', help='GPU to use')
-    parser.add_argument('-n', '--netname', type=str, default='mnist', help='mnist or cifar')
+    parser.add_argument('-n', '--netname', type=str, default='wgan_mnist', help='mnist or cifar')
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu

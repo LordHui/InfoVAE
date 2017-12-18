@@ -91,7 +91,7 @@ class LLEvaluator:
             for iter in range(10000):
                 bx = self.model.dataset.next_batch(100)
                 nll, elbo, _ = self.sess.run([self.loss_nll, self.loss_elbo, self.calib_train], feed_dict={self.x: bx})
-                if iter % 1000 == 0:
+                if iter % 2000 == 0:
                     test_bx = self.model.dataset.next_test_batch(100)
                     test_nll, test_elbo = self.sess.run([self.loss_nll, self.loss_elbo], feed_dict={self.x: test_bx})
                     print("Calibration iter %d, nll=%.4f/%.4f, elbo=%.4f/%.4f" % (iter, nll, test_nll, elbo, test_elbo))
@@ -100,7 +100,7 @@ class LLEvaluator:
         for iter in range(10000):
             bx = self.model.dataset.next_test_batch(100)
             nll, elbo, _ = self.sess.run([self.loss_nll, self.loss_elbo, self.vi_train], feed_dict={self.x: bx})
-            if iter % 1000 == 0:
+            if iter % 2000 == 0:
                 print("VI iteration %d, nll=%.4f, elbo=%.4f" % (iter, nll, elbo))
 
     def compute_ll(self, num_batch=50):
@@ -113,7 +113,8 @@ class LLEvaluator:
             batch_x = self.model.dataset.next_batch(100)
             nll = self.compute_nll_by_is(batch_x)
             test_nll.append(nll)
-            print("Nll is %.4f/%.4f" % (np.mean(train_nll), np.mean(test_nll)))
+            if i % 5 == 0:
+                print("Nll is %.4f/%.4f" % (np.mean(train_nll), np.mean(test_nll)))
         return np.mean(train_nll), np.mean(test_nll)
 
     def compute_nll_by_is(self, batch_x, verbose=False):
