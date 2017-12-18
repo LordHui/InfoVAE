@@ -60,8 +60,8 @@ def compute_mmd(x, y):   # [batch_size, z_dim] [batch_size, z_dim]
 
 
 class VAE:
-    def __init__(self, dataset, name='vae', reg_type='elbo'):
-        self.name = name
+    def __init__(self, dataset, args):
+        self.name = '%s_%.2f_%.2f' % (args.reg_type, args.mi, args.reg_size)
         self.dataset = dataset
         self.data_dims = dataset.data_dims
         self.z_dim = 10
@@ -94,11 +94,11 @@ class VAE:
         self.loss_nll = tf.reduce_mean(nll_per_sample)
 
         self.reg_coeff = tf.placeholder(tf.float32, shape=[])
-        if reg_type == 'mmd':
+        if args.reg_type == 'mmd':
             loss_all = self.loss_nll + (args.reg_size + args.mi - 1.0) * self.loss_mmd + (1.0 - args.mi) * self.loss_elbo
-        elif reg_type == 'elbo':
+        elif args.reg_type == 'elbo':
             loss_all = self.loss_nll + (1.0 - args.mi) * self.loss_elbo
-        elif reg_type == 'elbo_anneal':
+        elif args.reg_type == 'elbo_anneal':
             loss_all = self.loss_nll + (1.0 - args.mi) * self.loss_elbo * self.reg_coeff
         else:
             loss_all = None
@@ -226,7 +226,5 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     dataset = MnistDataset(binary=True)
-    name = '%s_%.2f_%.2f' % (args.reg_type, args.mi, args.reg_size)
-
-    c = VAE(dataset, name)
+    c = VAE(dataset, args=args)
     c.train()
