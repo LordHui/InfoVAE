@@ -205,7 +205,7 @@ class VAE:
 
             if iter % 1000 == 0:
                 print("Iteration %d, time: %4.4f, nll %.4f, mmd %.4f, elbo %.4f" %
-                      (i, time.time() - start_time, nll, mmd, elbo))
+                      (iter, time.time() - start_time, nll, mmd, elbo))
 
             if iter % 100 == 0:
                 merged = self.sess.run(self.train_summary, feed_dict={self.train_x: bx})
