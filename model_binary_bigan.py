@@ -52,8 +52,10 @@ def conv_inference(x, z_dim, reuse=False):
         return zmean, zstddev
 
 
-def conv_generator(z, data_dims):
+def conv_generator(z, data_dims, reuse=False):
     with tf.variable_scope('g_net') as vs:
+        if reuse:
+            vs.reuse_variables()
         fc1 = fc_bn_relu(z, 1024)
         fc2 = fc_bn_relu(fc1, int(data_dims[0]/4)*int(data_dims[1]/4)*128)
         fc2 = tf.reshape(fc2, tf.stack([tf.shape(fc2)[0], int(data_dims[0]/4), int(data_dims[1]/4), 128]))

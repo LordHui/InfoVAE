@@ -81,10 +81,10 @@ class Classifier:
             probs.append(y_prob)
         y_prob = np.concatenate(probs, axis=0)
         y_marginal = np.mean(y_prob, axis=0)
-        print(y_marginal)
+        # print(y_marginal)
         cond_ent = np.mean([entropy(y_prob[i]) for i in range(y_prob.shape[0])])
         ent = entropy(y_marginal)
-        print(ent, cond_ent)
+        # print(ent, cond_ent)
         return ent - cond_ent
 
     def network(self, x, reuse=False):
