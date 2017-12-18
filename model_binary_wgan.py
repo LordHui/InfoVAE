@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use('Agg')
+
 import tensorflow as tf
 import numpy as np
 import time
@@ -221,8 +224,7 @@ class GenerativeAdversarialNet(object):
 
 
 if __name__ == '__main__':
-    import matplotlib
-    matplotlib.use('Agg')
+
 
     parser = argparse.ArgumentParser()
     # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
