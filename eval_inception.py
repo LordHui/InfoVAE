@@ -52,9 +52,9 @@ class Classifier:
             batch_xs = np.reshape(batch_xs, [-1, 28, 28, 1])
             self.sess.run(train_step, feed_dict={self.x: batch_xs, y_: batch_ys, self.keep_prob: 0.5})
             if i % 1000 == 0:
-                print("Iteration %d, acc=%.4f" %
+                print("Iteration %d, acc=%.4f" % (i,
                       self.sess.run(accuracy, feed_dict={self.x: np.reshape(self.mnist.test.images, [-1, 28, 28, 1]),
-                                                         y_: self.mnist.test.labels, self.keep_prob: 1.0}))
+                                                         y_: self.mnist.test.labels, self.keep_prob: 1.0})))
 
         saver.save(self.sess, os.path.join(data_path, 'classifier.ckpt'))
 
