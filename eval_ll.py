@@ -15,7 +15,7 @@ def variational_posterior(x, z_dim):
         fc1 = fc_lrelu(conv2, 1024)
         mean = tf.contrib.layers.fully_connected(fc1, z_dim, activation_fn=tf.identity)
         stddev = tf.contrib.layers.fully_connected(fc1, z_dim, activation_fn=tf.sigmoid)
-        stddev = tf.maximum(stddev, 0.01)
+        stddev = tf.maximum(stddev, 0.05)
         return mean, stddev
 
 
