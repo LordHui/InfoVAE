@@ -42,6 +42,7 @@ def decoder(z, reuse=False):
         fc2 = tf.reshape(fc2, tf.stack([tf.shape(fc2)[0], 7, 7, 128]))
         conv1 = conv2d_t_relu(fc2, 64, 4, 2)
         mean = tf.contrib.layers.convolution2d_transpose(conv1, 1, 4, 2, activation_fn=tf.sigmoid)
+        mean = tf.maximum(tf.minimum(mean, 0.995), 0.005)
         return mean
 
 
