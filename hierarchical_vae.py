@@ -155,7 +155,10 @@ train_summary = tf.summary.merge([
     tf.summary.scalar('reconstruction', reconstruction),
     tf.summary.scalar('loss', loss_all)
 ])
-img_summary = create_multi_display([tf.reshape(train_xr, [100, 28, 28, 1]), tf.reshape(gen_x, [100, 28, 28, 1])], 'samples')
+img_summary = create_multi_display([tf.reshape(train_xr, [100, 28, 28, 1]),
+                                    tf.reshape(train_xz, [100, 28, 28, 1]),
+                                    tf.reshape(train_xzr, [100, 28, 28, 1]),
+                                    tf.reshape(gen_x, [100, 28, 28, 1])], 'samples')
 
 dataset = MnistDataset()
 
