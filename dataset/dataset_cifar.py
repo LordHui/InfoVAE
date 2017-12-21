@@ -4,7 +4,6 @@ else:
     from .abstract_dataset import *
 import numpy as np
 import os, sys
-import cv2
 import scipy.misc as misc
 
 class CifarDataset(Dataset):
@@ -16,6 +15,8 @@ class CifarDataset(Dataset):
         self.use_edge = use_edge
         self.name = "cifar"
         self.folder = "cifar"
+        if self.use_edge:
+            import cv2
         self.train_data = np.zeros((50000, 32, 32, 3))
         if one_hot:
             self.train_labels = np.zeros((50000, 10), dtype=np.float32)

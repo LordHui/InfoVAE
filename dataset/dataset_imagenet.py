@@ -2,7 +2,7 @@ if __name__ == '__main__':
     from abstract_dataset import *
 else:
     from .abstract_dataset import *
-import cv2, time
+import time
 
 class ImagenetDataset(Dataset):
     def __init__(self, use_edge=False, db_path='/data/data/imagenet/train64'):
@@ -12,7 +12,8 @@ class ImagenetDataset(Dataset):
         self.batch_size = 100
         self.db_path = db_path
         self.use_edge = use_edge
-
+        if self.use_edge:
+            import cv2
         synset_file = open(os.path.join(self.db_path, "meta.txt"), "r")
         self.synset = []
         while True:

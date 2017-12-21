@@ -26,7 +26,7 @@ args = parser.parse_args()
 
 # python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-batch_size = 200
+batch_size = 100
 
 
 def make_model_path(name):
@@ -155,7 +155,7 @@ train_summary = tf.summary.merge([
     tf.summary.scalar('reconstruction', reconstruction),
     tf.summary.scalar('loss', loss_all)
 ])
-img_summary = create_multi_display([train_xr, gen_x], 'samples')
+img_summary = create_multi_display([tf.reshape(train_xr, [100, 28, 28, 1]), tf.reshape(gen_x, [100, 28, 28, 1])], 'samples')
 
 dataset = MnistDataset()
 

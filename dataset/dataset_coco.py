@@ -6,7 +6,6 @@ else:
 
 import tensorflow as tf
 import pickle
-import cv2
 import time
 
 class CocoDataset(Dataset):
@@ -16,7 +15,8 @@ class CocoDataset(Dataset):
         self.data_dims = [64, 64, 3]
         self.name = "coco"
         self.use_edge = use_edge
-
+        if self.use_edge:
+            import cv2
         self.categories = pickle.load(open(os.path.join(db_path, "train2014_64/labels.p"), "rb"))['names']
 
         self.train_files = os.listdir(os.path.join(db_path, "train2014_64"))
