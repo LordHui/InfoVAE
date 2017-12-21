@@ -136,9 +136,9 @@ for i in range(100000):
     if i % 250 == 0:
         bz = np.random.normal(size=(batch_size, z_dim))
         summary_writer.add_summary(sess.run(img_summary, feed_dict={train_x: batch_x, reg_coeff: reg_val, gen_z: bz}), i)
-        if i % 2000 == 0:
-            samples_mean = sess.run(gen_x, feed_dict={gen_z: bz})
-            plots = convert_to_display(samples_mean)
-            misc.imsave(os.path.join(log_path, 'samples%d.png' % i), plots)
+        # if i % 2000 == 0:
+        #     samples_mean = sess.run(gen_x, feed_dict={gen_z: bz})
+        #     plots = convert_to_display(samples_mean)
+        #     misc.imsave(os.path.join(log_path, 'samples%d.png' % i), plots)
 
 
