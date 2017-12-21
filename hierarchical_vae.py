@@ -102,6 +102,7 @@ gen_z = tf.placeholder(tf.float32, shape=[None, z_dim])
 gen_xz = decoder(gen_z, reuse=True)
 gen_x = pre_decoder(gen_xz, reuse=True)
 
+
 def compute_kernel(x, y):
     x_size = tf.shape(x)[0]
     y_size = tf.shape(y)[0]
@@ -128,9 +129,9 @@ loss_elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(tr
 loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 
 # Negative log likelihood per dimension
-loss_nll_per_sample = 20.0 * tf.reduce_sum(tf.square(train_xzr - train_xz), axis=(1, 2, 3)) + \
-    20.0 * tf.reduce_sum(tf.square(train_xr - train_x), axis=(1, 2, 3))
-loss_nll = tf.reduce_mean(loss_nll_per_sample)
+pre_reconstruction = 20.0 * tf.reduce_sum(tf.square(train_xzr - train_xz), axis=(1, 2, 3))
+reconstruction = 20.0 * tf.reduce_sum(tf.square(train_xr - train_x), axis=(1, 2, 3))
+loss_nll = tf.reduce_mean(pre_reconstruction + reconstruction)
 
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
@@ -160,10 +161,10 @@ for i in range(100000):
         reg_val = 0.01
     else:
         reg_val = 1.0
-    _, loss, nll, mmd, elbo = \
-        sess.run([trainer, loss_all, loss_nll, loss_mmd, loss_elbo], feed_dict={train_x: batch_x, reg_coeff: reg_val})
+    _, loss, nll, mmd, elbo, rec, pre_rec = \
+        sess.run([trainer, loss_all, loss_nll, loss_mmd, loss_elbo, reconstruction, pre_reconstruction], feed_dict={train_x: batch_x, reg_coeff: reg_val})
     if i % 100 == 0:
-        print("Iteration %d, nll %.4f, mmd loss %.4f, elbo loss %.4f" % (i, nll, mmd, elbo))
+        print("Iteration %d, nll %.4f, mmd loss %.4f, elbo loss %.4f, rec %.4f, pre-rec %.4f" % (i, nll, mmd, elbo, rec, pre_rec))
     if i % 250 == 0:
         samples_mean = sess.run(gen_x, feed_dict={gen_z: np.random.normal(size=(100, z_dim))})
         plots = convert_to_display(samples_mean)
