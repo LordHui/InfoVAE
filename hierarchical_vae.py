@@ -41,11 +41,6 @@ if len(args.name) == 0:
 log_path = make_model_path(args.name)
 
 
-# Define some handy network layers
-def lrelu(x, rate=0.1):
-    return tf.maximum(tf.minimum(x * rate, 0), x)
-
-
 def pre_encoder(x):
     with tf.variable_scope('pre_encoder'):
         conv1 = conv2d_lrelu(x, 64, 4, 1)
