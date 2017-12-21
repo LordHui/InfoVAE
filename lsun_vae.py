@@ -96,7 +96,7 @@ loss_elbo_per_sample = tf.reduce_mean(-tf.log(train_zstddev) + 0.5 * tf.square(t
 loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 
 # Negative log likelihood per dimension
-loss_nll = 10.0 * tf.reduce_mean(tf.reduce_mean(tf.square(train_xr - train_x), axis=(1, 2, 3)))
+loss_nll = 30.0 * tf.reduce_mean(tf.reduce_mean(tf.abs(train_xr - train_x), axis=(1, 2, 3)))
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
 loss_all = loss_nll + reg_coeff * loss_elbo
