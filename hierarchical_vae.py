@@ -49,7 +49,7 @@ def lrelu(x, rate=0.1):
 def pre_encoder(x):
     with tf.variable_scope('pre_encoder'):
         conv1 = conv2d_lrelu(x, 64, 4, 1)
-        conv2 = conv2d_lrelu(conv1, 8, 4, 1)
+        conv2 = tf.contrib.layers.convolution2d(conv1, 8, 4, 1, activation_fn=tf.sigmoid)
         return conv2
 
 
