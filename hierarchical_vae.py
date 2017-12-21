@@ -55,7 +55,7 @@ def pre_decoder(z, reuse=False):
         if reuse:
             vs.reuse_variables()
         conv1 = conv2d_t_relu(z, 64, 4, 2)
-        conv2 = conv2d_t_relu(conv1, 1, 4, 1)
+        conv2 = tf.contrib.layers.convolution2d(conv1, 1, 4, 1, activation_fn=tf.sigmoid)
         return conv2
 
 
