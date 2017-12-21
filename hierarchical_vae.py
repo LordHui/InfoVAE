@@ -20,6 +20,7 @@ parser.add_argument('-g', '--gpu', type=str, default='1', help='GPU to use')
 parser.add_argument('-m', '--mi', type=float, default=0.0, help='Information Preference')
 parser.add_argument('-s', '--reg_size', type=float, default=50.0, help='Strength of posterior regularization, valid for mmd regularization')
 parser.add_argument('-z', '--zdim', type=int, default=10, help='Dimensionality of z')
+parser.add_argument('-n', '--name', type=str, default='', help='Run name')
 args = parser.parse_args()
 
 
@@ -35,7 +36,9 @@ def make_model_path(name):
     os.makedirs(log_path)
     return log_path
 
-log_path = make_model_path('h%s_%.1f_%.1f' % (args.reg_type, args.mi, args.reg_size))
+if len(args.name) == 0:
+    args.name = 'h%s_%.1f_%.1f' % (args.reg_type, args.mi, args.reg_size)
+log_path = make_model_path(args.name)
 
 
 # Define some handy network layers
@@ -129,10 +132,9 @@ loss_elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(tr
 loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 
 # Negative log likelihood per dimension
-pre_reconstruction = 20.0 * tf.reduce_sum(tf.square(train_xzr - train_xz), axis=(1, 2, 3))
-reconstruction = 20.0 * tf.reduce_sum(tf.square(train_xr - train_x), axis=(1, 2, 3))
-loss_nll = tf.reduce_mean(pre_reconstruction + reconstruction)
-
+pre_reconstruction = 10.0 * tf.reduce_mean(tf.reduce_sum(tf.square(train_xzr - train_xz), axis=(1, 2, 3)))
+reconstruction = 10.0 * tf.reduce_mean(tf.reduce_sum(tf.square(train_xr - train_x), axis=(1, 2, 3)))
+loss_nll = pre_reconstruction + reconstruction
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
 if args.reg_type == 'mmd':
@@ -146,12 +148,21 @@ else:
     exit(-1)
 
 trainer = tf.train.AdamOptimizer(1e-4).minimize(loss_all)
+train_summary = tf.summary.merge([
+    tf.summary.scalar('mmd', loss_mmd),
+    tf.summary.scalar('elbo', loss_elbo),
+    tf.summary.scalar('pre-reconstruction', pre_reconstruction),
+    tf.summary.scalar('reconstruction', reconstruction),
+    tf.summary.scalar('loss', loss_all)
+])
+img_summary = create_multi_display([train_xr, gen_x], 'samples')
 
 dataset = MnistDataset()
 
 gpu_options = tf.GPUOptions(allow_growth=True)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
 sess.run(tf.global_variables_initializer())
+summary_writer = tf.summary.FileWriter(log_path)
 
 # Start training
 # plt.ion()
@@ -165,10 +176,12 @@ for i in range(100000):
         sess.run([trainer, loss_all, loss_nll, loss_mmd, loss_elbo, reconstruction, pre_reconstruction], feed_dict={train_x: batch_x, reg_coeff: reg_val})
     if i % 100 == 0:
         print("Iteration %d, nll %.4f, mmd loss %.4f, elbo loss %.4f, rec %.4f, pre-rec %.4f" % (i, nll, mmd, elbo, rec, pre_rec))
+        summary_writer.add_summary(sess.run(train_summary, feed_dict={train_x: batch_x, reg_coeff: reg_val}), i)
     if i % 250 == 0:
-        samples_mean = sess.run(gen_x, feed_dict={gen_z: np.random.normal(size=(100, z_dim))})
+        bz = np.random.normal(size=(100, z_dim))
+        samples_mean = sess.run(gen_x, feed_dict={gen_z: bz})
         plots = convert_to_display(samples_mean)
         misc.imsave(os.path.join(log_path, 'samples%d.png' % i), plots)
-
+        summary_writer.add_summary(sess.run(img_summary, feed_dict={train_x: batch_x, reg_coeff: reg_val, gen_z: bz}), i)
 
 
