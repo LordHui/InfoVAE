@@ -49,7 +49,7 @@ def lrelu(x, rate=0.1):
 def pre_encoder(x):
     with tf.variable_scope('pre_encoder'):
         conv1 = conv2d_lrelu(x, 64, 4, 1)
-        conv2 = conv2d_lrelu(conv1, 16, 4, 1)
+        conv2 = conv2d_lrelu(conv1, 8, 4, 1)
         return conv2
 
 
@@ -66,7 +66,7 @@ def pre_decoder(z, reuse=False):
 # 28 x 28 x 1
 def encoder(x, z_dim):
     with tf.variable_scope('encoder'):
-        conv1 = conv2d_lrelu(x, 64, 4, 1)   # None x 14 x 14 x 64
+        conv1 = conv2d_lrelu(x, 64, 4, 2)   # None x 14 x 14 x 64
         conv2 = conv2d_lrelu(conv1, 128, 4, 2)   # None x 7 x 7 x 128
         conv2 = tf.reshape(conv2, [-1, np.prod(conv2.get_shape().as_list()[1:])]) # None x (7x7x128)
         fc1 = fc_lrelu(conv2, 1024)
@@ -84,7 +84,7 @@ def decoder(z, reuse=False):
         fc2 = fc_relu(fc1, 7*7*128)
         fc2 = tf.reshape(fc2, tf.stack([tf.shape(fc2)[0], 7, 7, 128]))
         conv1 = conv2d_t_relu(fc2, 64, 4, 2)
-        mean = tf.contrib.layers.convolution2d_transpose(conv1, 1, 4, 1, activation_fn=tf.sigmoid)
+        mean = tf.contrib.layers.convolution2d_transpose(conv1, 1, 4, 2, activation_fn=tf.sigmoid)
         return mean
 
 
@@ -155,11 +155,12 @@ train_summary = tf.summary.merge([
     tf.summary.scalar('reconstruction', reconstruction),
     tf.summary.scalar('loss', loss_all)
 ])
-img_summary = create_multi_display([tf.reshape(train_xr, [100, 28, 28, 1]),
-                                    tf.reshape(train_xz, [100, 28, 28, 1]),
-                                    tf.reshape(train_xzr, [100, 28, 28, 1]),
-                                    tf.reshape(gen_x, [100, 28, 28, 1])], 'samples')
 
+xr_slices = [tf.reshape(train_xz[:, :, :, i:i+1], [100, 28, 28, 1]) for i in range(8)]
+img_summary = tf.summary.merge([
+    create_multi_display([tf.reshape(train_xr, [100, 28, 28, 1])] + xr_slices, 'train'),
+    create_display(tf.reshape(gen_x, [100, 28, 28, 1]), 'samples')
+])
 dataset = MnistDataset()
 
 gpu_options = tf.GPUOptions(allow_growth=True)
