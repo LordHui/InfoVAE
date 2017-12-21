@@ -19,6 +19,7 @@ parser.add_argument('-r', '--reg_type', type=str, default='elbo', help='Type of 
 parser.add_argument('-g', '--gpu', type=str, default='1', help='GPU to use')
 parser.add_argument('-m', '--mi', type=float, default=0.0, help='Information Preference')
 parser.add_argument('-s', '--reg_size', type=float, default=50.0, help='Strength of posterior regularization, valid for mmd regularization')
+parser.add_argument('-z', '--zdim', type=int, default=10, help='Dimensionality of z')
 args = parser.parse_args()
 
 
@@ -85,7 +86,7 @@ def decoder(z, reuse=False):
 
 
 # Build the computation graph for training
-z_dim = 20
+z_dim = args.zdim
 x_dim = [28, 28, 1]
 train_x = tf.placeholder(tf.float32, shape=[None]+x_dim)
 train_xz = pre_encoder(train_x)
