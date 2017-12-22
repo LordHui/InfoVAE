@@ -55,6 +55,7 @@ def encoder(x, z_dim):
         mean = tf.contrib.layers.fully_connected(fc, z_dim, activation_fn=tf.identity)
         stddev = tf.contrib.layers.fully_connected(fc, z_dim, activation_fn=tf.sigmoid)
         stddev = tf.maximum(stddev, 0.01)
+        mean = tf.maximum(tf.minimum(mean, 10.0), -10.0)
         return mean, stddev
 
 
@@ -82,6 +83,7 @@ def encoder2(z, y_dim):
         fc = fc_lrelu(z, 2048)
         fc = fc_lrelu(fc, 2048)
         mean = tf.contrib.layers.fully_connected(fc, y_dim, activation_fn=tf.identity)
+        mean = tf.maximum(tf.minimum(mean, 10.0), -10.0)
         stddev = tf.contrib.layers.fully_connected(fc, y_dim, activation_fn=tf.sigmoid)
         stddev = tf.maximum(stddev, 0.01)
         return mean, stddev
@@ -94,6 +96,7 @@ def decoder2(y, z_dim, reuse=False):
         fc = fc_relu(y, 2048)
         fc = fc_relu(fc, 2048)
         mean = tf.contrib.layers.fully_connected(fc, z_dim, activation_fn=tf.identity)
+        mean = tf.maximum(tf.minimum(mean, 10.0), -10.0)
         stddev = tf.contrib.layers.fully_connected(fc, z_dim, activation_fn=tf.sigmoid)
         stddev = tf.maximum(stddev, 0.01)
         return mean, stddev
@@ -109,7 +112,7 @@ train_z = train_zmean + tf.multiply(train_zstddev,
                                     tf.random_normal(tf.stack([tf.shape(train_x)[0], z_dim])))
 train_xr = decoder(train_z)
 
-train_ymean, train_ystddev = encoder2(train_z, y_dim)
+train_ymean, train_ystddev = encoder2(tf.stop_gradient(train_z), y_dim)
 train_y = train_ymean + tf.multiply(train_ystddev,
                                     tf.random_normal(tf.stack([tf.shape(train_x)[0], y_dim])))
 train_zrmean, train_zrstddev = decoder2(train_y, z_dim)
@@ -140,7 +143,7 @@ loss_elbo2 = tf.reduce_mean(loss_elbo2_per_sample)
 
 # Negative log likelihood per dimension
 loss_nll = 30.0 * tf.reduce_mean(tf.reduce_mean(tf.abs(train_xr - train_x), axis=(1, 2, 3)))
-loss_nll2 = 20 * tf.reduce_mean(compute_kl(train_zmean, train_zstddev, train_zrmean, train_zrstddev))
+loss_nll2 = 20 * tf.reduce_mean(compute_kl(tf.stop_gradient(train_zmean), tf.stop_gradient(train_zstddev), train_zrmean, train_zrstddev))
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
 loss_all = loss_nll + loss_nll2 + reg_coeff * (loss_elbo + loss_elbo2)
