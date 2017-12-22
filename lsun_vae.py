@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-g', '--gpu', type=str, default='1', help='GPU to use')
 parser.add_argument('-z', '--zdim', type=int, default=100, help='Dimensionality of z')
+parser.add_argument('-y', '--ydim', type=int, default=100, help='Dimensionality of y')
 parser.add_argument('-n', '--name', type=str, default='', help='Run name')
 parser.add_argument('-d', '--db_path', type=str, default='../data/bedroom', help='LSUN path')
 args = parser.parse_args()
@@ -33,7 +34,7 @@ def make_model_path(name):
     return log_path
 
 if len(args.name) == 0:
-    args.name = 'lsun_vae%d' % args.zdim
+    args.name = 'lsun_vae%d_%d' % (args.zdim, args.ydim)
 log_path = make_model_path(args.name)
 
 
@@ -76,30 +77,73 @@ def decoder(z, reuse=False):
         return mean
 
 
+def encoder2(z, y_dim):
+    with tf.variable_scope('encoder2') as vs:
+        fc = fc_lrelu(z, 2048)
+        fc = fc_lrelu(fc, 2048)
+        mean = tf.contrib.layers.fully_connected(fc, y_dim, activation_fn=tf.identity)
+        stddev = tf.contrib.layers.fully_connected(fc, y_dim, activation_fn=tf.sigmoid)
+        stddev = tf.maximum(stddev, 0.01)
+        return mean, stddev
+
+
+def decoder2(y, z_dim, reuse=False):
+    with tf.variable_scope('decoder2') as vs:
+        if reuse:
+            vs.reuse_variables()
+        fc = fc_relu(y, 2048)
+        fc = fc_relu(fc, 2048)
+        mean = tf.contrib.layers.fully_connected(fc, z_dim, activation_fn=tf.identity)
+        stddev = tf.contrib.layers.fully_connected(fc, z_dim, activation_fn=tf.sigmoid)
+        stddev = tf.maximum(stddev, 0.01)
+        return mean, stddev
+
+
 # Build the computation graph for training
 z_dim = args.zdim
+y_dim = args.ydim
 x_dim = [64, 64, 3]
-train_x = tf.placeholder(tf.float32, shape=[None]+x_dim)
+train_x = tf.placeholder(tf.float32, shape=[None] + x_dim)
 train_zmean, train_zstddev = encoder(train_x, z_dim)
 train_z = train_zmean + tf.multiply(train_zstddev,
                                     tf.random_normal(tf.stack([tf.shape(train_x)[0], z_dim])))
 train_xr = decoder(train_z)
 
+train_ymean, train_ystddev = encoder2(train_z, y_dim)
+train_y = train_ymean + tf.multiply(train_ystddev,
+                                    tf.random_normal(tf.stack([tf.shape(train_x)[0], y_dim])))
+train_zrmean, train_zrstddev = decoder2(train_y, z_dim)
+
+
+def compute_kl(mean1, stddev1, mean2, stddev2):
+    return tf.log(stddev2) - tf.log(stddev1) - \
+           (tf.square(stddev1) + tf.square(mean1 - mean2)) / tf.square(stddev2) / 2 - 0.5
+
 # Build the computation graph for generating samples
 gen_z = tf.placeholder(tf.float32, shape=[None, z_dim])
 gen_x = decoder(gen_z, reuse=True)
 
+gen2_y = tf.placeholder(tf.float32, shape=[None, y_dim])
+gen2_zmean, gen2_zstddev = decoder2(gen2_y, z_dim, reuse=True)
+gen2_z = gen2_zmean + tf.multiply(gen2_zstddev,
+                                  tf.random_normal(tf.stack([tf.shape(train_x)[0], z_dim])))
+gen2_x = decoder(gen2_z, reuse=True)
 
 # ELBO loss divided by input dimensions
 loss_elbo_per_sample = tf.reduce_mean(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) +
                                      0.5 * tf.square(train_zmean) - 0.5, axis=1)
 loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 
+loss_elbo2_per_sample = tf.reduce_mean(-tf.log(train_ystddev) + 0.5 * tf.square(train_ystddev) +
+                                     0.5 * tf.square(train_ymean) - 0.5, axis=1)
+loss_elbo2 = tf.reduce_mean(loss_elbo2_per_sample)
+
 # Negative log likelihood per dimension
 loss_nll = 30.0 * tf.reduce_mean(tf.reduce_mean(tf.abs(train_xr - train_x), axis=(1, 2, 3)))
+loss_nll2 = 20 * tf.reduce_mean(compute_kl(train_zmean, train_zstddev, train_zrmean, train_zrstddev))
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
-loss_all = loss_nll + reg_coeff * loss_elbo
+loss_all = loss_nll + loss_nll2 + reg_coeff * (loss_elbo + loss_elbo2)
 
 trainer = tf.train.AdamOptimizer(1e-4).minimize(loss_all)
 train_summary = tf.summary.merge([
@@ -111,7 +155,8 @@ train_summary = tf.summary.merge([
 img_summary = tf.summary.merge([
     create_multi_display([tf.reshape(train_x, [batch_size, 64, 64, 3]),
                           tf.reshape(train_xr, [batch_size, 64, 64, 3])], 'train'),
-    create_display(tf.reshape(gen_x, [batch_size, 64, 64, 3]), 'samples')
+    create_display(tf.reshape(gen_x, [batch_size, 64, 64, 3]), 'samples'),
+    create_display(tf.reshape(gen2_x, [batch_size, 64, 64, 3]), 'samples2')
 ])
 dataset = LSUNDataset(db_path=args.db_path)
 
@@ -135,7 +180,8 @@ for i in range(100000):
         summary_writer.add_summary(sess.run(train_summary, feed_dict={train_x: batch_x, reg_coeff: reg_val}), i)
     if i % 2000 == 0:
         bz = np.random.normal(size=(batch_size, z_dim))
-        summary_writer.add_summary(sess.run(img_summary, feed_dict={train_x: batch_x, reg_coeff: reg_val, gen_z: bz}), i)
+        by = np.random.normal(size=(batch_size, y_dim))
+        summary_writer.add_summary(sess.run(img_summary, feed_dict={train_x: batch_x, reg_coeff: reg_val, gen_z: bz, gen2_y: by}), i)
         # if i % 2000 == 0:
         #     samples_mean = sess.run(gen_x, feed_dict={gen_z: bz})
         #     plots = convert_to_display(samples_mean)
