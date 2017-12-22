@@ -148,7 +148,9 @@ loss_all = loss_nll + loss_nll2 + reg_coeff * (loss_elbo + loss_elbo2)
 trainer = tf.train.AdamOptimizer(1e-4).minimize(loss_all)
 train_summary = tf.summary.merge([
     tf.summary.scalar('elbo', loss_elbo),
+    tf.summary.scalar('elbo2', loss_elbo2),
     tf.summary.scalar('reconstruction', loss_nll),
+    tf.summary.scalar('reconstruction2', loss_nll2),
     tf.summary.scalar('loss', loss_all)
 ])
 
