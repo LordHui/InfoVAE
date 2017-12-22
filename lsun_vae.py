@@ -119,7 +119,7 @@ train_zrmean, train_zrstddev = decoder2(train_y, z_dim)
 
 
 def compute_kl(mean1, stddev1, mean2, stddev2):
-    return tf.log(stddev2) - tf.log(stddev1) - \
+    return tf.log(stddev2) - tf.log(stddev1) + \
            (tf.square(stddev1) + tf.square(mean1 - mean2)) / tf.square(stddev2) / 2 - 0.5
 
 # Build the computation graph for generating samples
