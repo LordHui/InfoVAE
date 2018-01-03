@@ -21,7 +21,7 @@ parser.add_argument('-w', '--mmd', type=float, default=0.0, help='Initial MMD we
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-if args.train_weight is True:
+if args.train_weight:
     run_name = 'mmd_tune%.1f-%.1f-%.1f'
 else:
     run_name = 'mmd_notune%.1f-%.1f-%.1f'
