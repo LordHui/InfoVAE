@@ -190,7 +190,7 @@ def make_model_path(name):
     os.makedirs(log_path)
     return log_path
 
-log_path = make_model_path('%s%.2f-%.2f' % (args.reg, args.max_reg, args.nll_bound))
+log_path = make_model_path(run_name)
 plot_path = os.path.join(log_path, 'plot')
 os.makedirs(plot_path)
 logger = open(os.path.join(log_path, 'log.txt'), 'w')
