@@ -128,12 +128,12 @@ loss_nll = tf.maximum(loss_nll, args.nll_bound)
 
 loss = loss_nll + kl_reg * kl_anneal + mmd_reg * mmd_weight
 trainer = tf.train.AdamOptimizer(1e-4).minimize(loss, var_list=model_param)
-lagrangian_trainer = tf.train.GradientDescentOptimizer(1e-4).minimize(-loss, var_list=lagrangian_param)
+lagrangian_trainer = tf.train.GradientDescentOptimizer(1.00).minimize(-loss, var_list=lagrangian_param)
 
 train_summary = tf.summary.merge([
     tf.summary.scalar('loss_nll', loss_nll),
     tf.summary.scalar('kl_reg', kl_reg),
-    tf.summary.scalar('mme_reg', mmd_reg),
+    tf.summary.scalar('mmd_reg', mmd_reg),
     tf.summary.scalar('loss', loss),
     tf.summary.scalar('mmd_weight', mmd_weight),
 ])
