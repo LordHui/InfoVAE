@@ -12,14 +12,20 @@ import argparse
 parser = argparse.ArgumentParser()
 # python elbo_mog.py --max_reg=0.5 --nll_bound=-3.0 --gpu=0
 
-parser.add_argument('-m', '--max_reg', type=float, default=1.0, help='Maximum coefficient for KL(q(z|x)||p(z))')
+parser.add_argument('-m', '--kl_reg', type=float, default=1.0, help='Maximum coefficient for KL(q(z|x)||p(z))')
 parser.add_argument('-n', '--nll_bound', type=float, default=-3.0, help='Lower bound on nll')
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-i', '--nll_iter', type=int, default=25000, help='Number of iterations for log likelihood evaluation')
-parser.add_argument('-r', '--reg', type=str, default='kl', help='Type of divergence, kl or mmd')
+parser.add_argument('-t', '--train_weight', type=bool, default=False, help='Train weighting of MMD')
+parser.add_argument('-w', '--mmd', type=float, default=0.0, help='Initial MMD weighting')
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+if args.train_weight:
+    run_name = 'mmd_tune%.1f-%.1f-%.1f'
+else:
+    run_name = 'mmd_notune%.1f-%.1f-%.1f'
+run_name %= (args.kl_reg, args.mmd, args.nll_bound)
 
 
 # Define some handy network layers
@@ -107,21 +113,18 @@ kl_anneal = tf.placeholder(tf.float32)
 # MMD Regularization
 true_samples = tf.random_normal(tf.stack([500, z_dim]))
 mmd_reg = compute_mmd(true_samples, train_zsample)
-mmd_weight = tf.Variable(1.0)
+mmd_weight = tf.Variable(args.mmd)
 
 model_param = [var for var in tf.global_variables() if 'encoder' in var.name or 'decoder' in var.name]
 lagrangian_param = [mmd_weight]
 
 # Log likelihood loss
 loss_nll = 0.5 * math.log(2 * math.pi) + tf.log(train_xstddev) + \
-    tf.square(train_xmean - train_x) / (2 * tf.square(train_xstddev))
+           tf.square(train_xmean - train_x) / (2 * tf.square(train_xstddev))
 loss_nll = tf.reduce_mean(tf.reduce_sum(loss_nll, axis=1))
 loss_nll = tf.maximum(loss_nll, args.nll_bound)
 
-if args.reg == 'kl':
-    loss = loss_nll + kl_reg * kl_anneal
-else:
-    loss = loss_nll + mmd_reg * 500
+loss = loss_nll + kl_reg * kl_anneal + mmd_reg * mmd_weight
 trainer = tf.train.AdamOptimizer(1e-4).minimize(loss, var_list=model_param)
 lagrangian_trainer = tf.train.GradientDescentOptimizer(1e-4).minimize(-loss, var_list=lagrangian_param)
 
@@ -204,15 +207,19 @@ for i in range(1, 10000000):
     if i < 20:
         kl_ratio = 0.01
     else:
-        kl_ratio = args.max_reg
-    _, total_loss, nll, kl, mmd = sess.run([trainer, loss, loss_nll, kl_reg, mmd_reg],
-                                           feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
+        kl_ratio = args.kl_reg
+    if args.train_weight:
+        sess.run([trainer, lagrangian_trainer], feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
+    else:
+        sess.run(trainer, feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
     if i % 100 == 0:
+        weight, nll, kl, mmd = sess.run([mmd_weight, loss_nll, kl_reg, mmd_reg],
+                                        feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
         summary = sess.run(train_summary,
                            feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
         writer.add_summary(summary, i)
-        print("Iteration %d: Loss %f, Negative log likelihood is %f, mmd loss is %f, kl loss is %f" % (i, total_loss, nll, mmd, kl))
-    if i % 100 == 0:
+        print("Iteration %d: Weighting %f, Negative log likelihood is %f, mmd loss is %f, kl loss is %f" % (i, weight, nll, mmd, kl))
+
         batch_x, mode_index = mog.sample(1000)
         batch_x = batch_x.reshape(-1, x_dim)
         z_samples = sess.run(train_zsample, feed_dict={train_x: batch_x})
