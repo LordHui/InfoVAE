@@ -16,7 +16,7 @@ parser.add_argument('-m', '--kl_reg', type=float, default=1.0, help='Maximum coe
 parser.add_argument('-n', '--nll_bound', type=float, default=-3.0, help='Lower bound on nll')
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-i', '--nll_iter', type=int, default=25000, help='Number of iterations for log likelihood evaluation')
-parser.add_argument('-t', '--train_weight', type=bool, default=False, help='Train weighting of MMD')
+parser.add_argument('--train_weight', dest='train_weight', action='store_true')
 parser.add_argument('-w', '--mmd', type=float, default=0.0, help='Initial MMD weighting')
 args = parser.parse_args()
 
