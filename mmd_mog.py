@@ -196,7 +196,7 @@ log_path = make_model_path(run_name)
 plot_path = os.path.join(log_path, 'plot')
 os.makedirs(plot_path)
 logger = open(os.path.join(log_path, 'log.txt'), 'w')
-writer = tf.summary.FileWriter(log_path, sess.graph)
+writer = tf.summary.FileWriter(logger, sess.graph)
 writer.flush()
 
 
