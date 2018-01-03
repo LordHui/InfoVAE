@@ -195,7 +195,7 @@ c_list = np.array(['r', 'g', 'b', 'm'])
 for i in range(1, 10000000):
     batch_x, _ = mog.sample(batch_size)
     batch_x = batch_x.reshape(-1, x_dim)
-    if i < 200:
+    if i < 20:
         kl_ratio = 0.01
     else:
         kl_ratio = args.max_reg
@@ -206,7 +206,7 @@ for i in range(1, 10000000):
                            feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
         writer.add_summary(summary, i)
         print("Iteration %d: Loss %f, Negative log likelihood is %f, mmd loss is %f, kl loss is %f" % (i, total_loss, nll, mmd, kl))
-    if i % 1000 == 0:
+    if i % 100 == 0:
         batch_x, mode_index = mog.sample(1000)
         batch_x = batch_x.reshape(-1, x_dim)
         z_samples = sess.run(train_zsample, feed_dict={train_x: batch_x})
