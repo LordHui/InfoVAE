@@ -21,7 +21,7 @@ parser.add_argument('-w', '--mmd', type=float, default=0.0, help='Initial MMD we
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-if args.train_weight:
+if args.train_weight is True:
     run_name = 'mmd_tune%.1f-%.1f-%.1f'
 else:
     run_name = 'mmd_notune%.1f-%.1f-%.1f'
@@ -196,7 +196,7 @@ log_path = make_model_path(run_name)
 plot_path = os.path.join(log_path, 'plot')
 os.makedirs(plot_path)
 logger = open(os.path.join(log_path, 'log.txt'), 'w')
-writer = tf.summary.FileWriter(logger, sess.graph)
+writer = tf.summary.FileWriter(log_path, sess.graph)
 writer.flush()
 
 
@@ -210,7 +210,7 @@ for i in range(1, 10000000):
         kl_ratio = 0.01
     else:
         kl_ratio = args.kl_reg
-    if args.train_weight:
+    if args.train_weight is True:
         sess.run([trainer, lagrangian_trainer], feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
     else:
         sess.run(trainer, feed_dict={train_x: batch_x, kl_anneal: kl_ratio})
