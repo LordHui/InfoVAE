@@ -114,10 +114,11 @@ kl_anneal = tf.placeholder(tf.float32)
 true_samples = tf.random_normal(tf.stack([500, z_dim]))
 mmd_reg = compute_mmd(true_samples, train_zsample)
 mmd_weight = tf.Variable(args.mmd)
-mmd_weight = tf.minimum(mmd_weight, 5000.0)
+
 
 model_param = [var for var in tf.global_variables() if 'encoder' in var.name or 'decoder' in var.name]
 lagrangian_param = [mmd_weight]
+mmd_weight = tf.minimum(mmd_weight, 5000.0)
 
 # Log likelihood loss
 loss_nll = 0.5 * math.log(2 * math.pi) + tf.log(train_xstddev) + \
