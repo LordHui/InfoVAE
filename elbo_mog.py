@@ -21,6 +21,7 @@ args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
+
 # Define some handy network layers
 def lrelu(x, rate=0.1):
     return tf.maximum(tf.minimum(x * rate, 0), x)
@@ -194,7 +195,7 @@ c_list = np.array(['r', 'g', 'b', 'm'])
 for i in range(1, 10000000):
     batch_x, _ = mog.sample(batch_size)
     batch_x = batch_x.reshape(-1, x_dim)
-    if i < 2000:
+    if i < 200:
         kl_ratio = 0.01
     else:
         kl_ratio = args.max_reg
