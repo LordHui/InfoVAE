@@ -32,7 +32,7 @@ def make_model_path(name):
     os.makedirs(log_path)
     return log_path
 
-log_path = make_model_path('vae%s_%.2f' % (args.reg_type, args.sparse_ratio))
+log_path = make_model_path('vae%s_%.3f' % (args.reg_type, args.sparse_ratio))
 
 
 # Encoder and decoder use the DC-GAN architecture
