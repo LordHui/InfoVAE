@@ -10,6 +10,7 @@ from abstract_network import *
 from dataset import *
 import argparse
 from eval_inception import *
+from dataset import *
 
 parser = argparse.ArgumentParser()
 # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
@@ -47,6 +48,7 @@ def conv_inference(x, z_dim, reuse=False):
         zstddev = tf.contrib.layers.fully_connected(fc1, z_dim, activation_fn=tf.sigmoid)
         zstddev += 0.001
         return zmean, zstddev
+
 
 def conv_large_discriminator(x, data_dims, reuse=False):
     with tf.variable_scope('d_net') as vs:
