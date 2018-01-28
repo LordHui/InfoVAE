@@ -21,7 +21,7 @@ args = parser.parse_args()
 
 # python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-batch_size = 200
+batch_size = 400
 dataset = MnistDataset()
 
 
@@ -112,7 +112,9 @@ train_summary = tf.summary.merge([
     tf.summary.scalar('elbo', loss_elbo),
     tf.summary.scalar('mmd', loss_mmd),
     tf.summary.scalar('nll', loss_nll),
-    tf.summary.scalar('sparsity', loss_sparsity)
+    tf.summary.scalar('sparsity', loss_sparsity),
+    tf.summary.histogram('zstddev', train_zstddev),
+    tf.summary.histogram('zmean', train_zmean),
 ])
 sample_summary = tf.summary.merge([
     create_display(tf.slice(train_xr, [0, 0, 0, 0], [100, -1, -1, -1]), name='train_samples'),
@@ -121,7 +123,7 @@ sample_summary = tf.summary.merge([
 
 reg_coeff = tf.placeholder(tf.float32, shape=[])
 if args.reg_type == 'mmd':
-    loss_all = loss_nll + 100 * loss_mmd
+    loss_all = loss_nll + 200 * loss_mmd
 elif args.reg_type == 'elbo':
     loss_all = loss_nll + loss_elbo
 elif args.reg_type == 'elbo_anneal':
