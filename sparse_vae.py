@@ -106,7 +106,7 @@ loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 loss_nll_per_sample = 10 * tf.reduce_sum(tf.square(train_x - train_xr), axis=(1, 2, 3))
 loss_nll = tf.reduce_mean(loss_nll_per_sample)
 
-loss_sparsity = tf.reduce_mean(tf.reduce_sum(tf.sqrt(1.00000 - train_zstddev) + tf.sqrt(train_zmean), axis=1))
+loss_sparsity = tf.reduce_mean(tf.reduce_sum(tf.sqrt(1.00001 - train_zstddev) + tf.sqrt(tf.abs(train_zmean) + 0.00001), axis=1))
 
 train_summary = tf.summary.merge([
     tf.summary.scalar('elbo', loss_elbo),
