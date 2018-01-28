@@ -1,8 +1,5 @@
 import matplotlib
 matplotlib.use('Agg')
-import tensorflow as tf
-import numpy as np
-import os, time
 import subprocess
 import argparse
 from abstract_network import *
@@ -105,7 +102,8 @@ loss_nll_per_sample = 10 * tf.reduce_sum(tf.square(train_x - train_xr), axis=(1,
 loss_nll = tf.reduce_mean(loss_nll_per_sample)
 
 loss_sparsity = tf.reduce_mean(tf.reduce_sum(tf.sqrt(tf.abs(train_zmean) + 0.00001), axis=1))
-
+stddev_per_dim = [tf.slice(train_zstddev, [0, i], [-1, 1]) for i in range(z_dim)]
+mean_per_dim = [tf.slice(train_zmean, [0, i], [-1, 1]) for i in range(z_dim)]
 train_summary = tf.summary.merge([
     tf.summary.scalar('elbo', loss_elbo),
     tf.summary.scalar('mmd', loss_mmd),
@@ -113,7 +111,8 @@ train_summary = tf.summary.merge([
     tf.summary.scalar('sparsity', loss_sparsity),
     tf.summary.histogram('zstddev', train_zstddev),
     tf.summary.histogram('zmean', train_zmean),
-])
+] + [tf.summary.histogram('zstddev/%d' % i, stddev_per_dim[i]) for i in range(z_dim)] +
+                                 [tf.summary.histogram('zmean/%d' % i, mean_per_dim[i]) for i in range(z_dim)])
 sample_summary = tf.summary.merge([
     create_display(tf.slice(train_xr, [0, 0, 0, 0], [100, -1, -1, -1]), name='train_samples'),
     create_display(tf.reshape(gen_x, [100] + x_dim), name='samples')
