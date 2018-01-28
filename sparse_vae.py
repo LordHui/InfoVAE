@@ -5,9 +5,6 @@ import numpy as np
 import os, time
 import subprocess
 import argparse
-from scipy import misc as misc
-from logger import *
-from limited_mnist import LimitedMnist
 from abstract_network import *
 from dataset import *
 
@@ -15,8 +12,8 @@ parser = argparse.ArgumentParser()
 # python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
 
 parser.add_argument('-r', '--reg_type', type=str, default='elbo', help='Type of regularization')
-parser.add_argument('-g', '--gpu', type=str, default='1', help='GPU to use')
-parser.add_argument('-s', '--sparse_ratio', type=float, default=0.1)
+parser.add_argument('-g', '--gpu', type=str, default='2', help='GPU to use')
+parser.add_argument('-s', '--sparse_ratio', type=float, default=1.0)
 args = parser.parse_args()
 
 # python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
@@ -32,7 +29,7 @@ def make_model_path(name):
     os.makedirs(log_path)
     return log_path
 
-log_path = make_model_path('vae%s_%.3f' % (args.reg_type, args.sparse_ratio))
+log_path = make_model_path('vae%s_mean_%.3f' % (args.reg_type, args.sparse_ratio))
 
 
 # Encoder and decoder use the DC-GAN architecture
@@ -106,7 +103,7 @@ loss_elbo = tf.reduce_mean(loss_elbo_per_sample)
 loss_nll_per_sample = 10 * tf.reduce_sum(tf.square(train_x - train_xr), axis=(1, 2, 3))
 loss_nll = tf.reduce_mean(loss_nll_per_sample)
 
-loss_sparsity = tf.reduce_mean(tf.reduce_sum(tf.sqrt(1.00001 - train_zstddev) + tf.sqrt(tf.abs(train_zmean) + 0.00001), axis=1))
+loss_sparsity = tf.reduce_mean(tf.reduce_sum(tf.sqrt(tf.abs(train_zmean) + 0.00001), axis=1))
 
 train_summary = tf.summary.merge([
     tf.summary.scalar('elbo', loss_elbo),
