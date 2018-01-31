@@ -2,18 +2,20 @@ from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
 
 
-
-
 # Train on limited data
 class LimitedMnist:
-    def __init__(self, size):
+    def __init__(self, size, binary=False):
         self.data_ptr = 0
-        self.size = size
         self.full_mnist = input_data.read_data_sets('mnist_data')
-        assert size <= self.full_mnist.train.images.shape[0]
+        if size > self.full_mnist.train.images.shape[0]:
+            size = self.full_mnist.train.images.shape[0]
+        self.size = size
         self.data = self.full_mnist.train.images
         np.random.shuffle(self.data)
-        self.data = self.data[:size]
+        self.data = np.reshape(self.data[:size], [-1, 28, 28, 1])
+        if binary:
+            self.data = np.rint(self.data)
+        self.binary = binary
 
     def next_batch(self, batch_size):
         assert batch_size <= self.size
@@ -25,13 +27,19 @@ class LimitedMnist:
         else:
             return self.data[prev_ptr:self.data_ptr]
 
+    def test_batch(self, batch_size):
+        batch_x = self.full_mnist.test.next_batch(batch_size)[0]
+        batch_x = np.reshape(batch_x, [-1, 28, 28, 1])
+        if self.binary:
+            batch_x = np.rint(batch_x)
+        return batch_x
 
 if __name__ == '__main__':
     from matplotlib import pyplot as plt
-    limited_mnist = LimitedMnist(200)
+    limited_mnist = LimitedMnist(200, binary=True)
     while True:
-        image_x = limited_mnist.next_batch(150).reshape([-1, 28, 28])
+        image_x = limited_mnist.test_batch(150)
         for i in range(100):
             plt.subplot(10, 10, i+1)
-            plt.imshow(image_x[i])
+            plt.imshow(image_x[i, :, :, 0])
         plt.show()
