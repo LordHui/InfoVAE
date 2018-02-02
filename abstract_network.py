@@ -127,7 +127,7 @@ def convert_to_display(samples, max_samples=100):
     return samples
 
 
-# Input a tensor of shape [channel, height, width, color_dim], tiles the tensor for display
+# Input a tensor of shape [batch_size, height, width, color_dim], tiles the tensor for display
 # color_dim can be 1 or 3. The tensor should be normalized to lie in [0, 1]
 def create_display(tensor, name):
     channels, height, width, color_dim = [tensor.get_shape()[i].value for i in range(4)]

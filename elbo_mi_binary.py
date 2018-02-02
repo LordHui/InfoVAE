@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import tensorflow as tf
 import numpy as np
 import os, time
@@ -160,11 +162,11 @@ for i in range(1000000):
         print("Iteration %d, nll %.4f, elbo loss %.4f" % (i, nll, elbo))
 
     if i == interval:
-        is_nll = 0
-        for i in range(40):
+        is_nll = 0.0
+        for j in range(40):
             test_data = limited_mnist.test_batch(200)
             is_nll += compute_nll_by_is(test_data, sess=sess, verbose=True)
-        is_nll /= 10
+        is_nll /= 40.0
         summary_val = sess.run(nll_summary, feed_dict={nll_ph: is_nll})
         summary_writer.add_summary(summary_val, i)
         interval = interval * 1.4 + 2000
