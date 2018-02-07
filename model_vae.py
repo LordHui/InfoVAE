@@ -150,7 +150,7 @@ class VAE:
         return x_sample
 
     def make_model_path(self):
-        log_path = os.path.join('log', self.name)
+        log_path = os.path.join('mnist/log', self.name)
         if os.path.isdir(log_path):
             subprocess.call(('rm -rf %s' % log_path).split())
         os.makedirs(log_path)
