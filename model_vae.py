@@ -65,7 +65,7 @@ def compute_mmd(x, y):   # [batch_size, z_dim] [batch_size, z_dim]
 
 class VAE:
     def __init__(self, dataset, args):
-        self.name = '%s_%.2f_%.2f' % (args.reg_type, args.mi, args.reg_size)
+        self.name = '%s_%d_%.2f_%.2f' % (args.reg_type, args.data_size, args.mi, args.reg_size)
         self.dataset = dataset
         self.data_dims = dataset.data_dims
         self.z_dim = 10
@@ -241,11 +241,12 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mi', type=float, default=0.0, help='Information Preference')
     parser.add_argument('-s', '--reg_size', type=float, default=50.0,
                         help='Strength of posterior regularization, valid for mmd regularization')
+    parser.add_argument('-t', '--data_size', type=int, default=1000)
     args = parser.parse_args()
 
     # python mmd_vae_eval.py --reg_type=elbo --gpu=0 --train_size=1000
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-    dataset = MnistDataset(binary=True)
+    dataset = LimitedMnist(args.data_size, binary=True)
     c = VAE(dataset, args=args)
     c.train()

@@ -16,6 +16,7 @@ class LimitedMnist:
         if binary:
             self.data = np.rint(self.data)
         self.binary = binary
+        self.data_dims = [28, 28, 1]
 
     def next_batch(self, batch_size):
         assert batch_size <= self.size
