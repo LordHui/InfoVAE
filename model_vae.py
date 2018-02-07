@@ -75,9 +75,9 @@ class VAE:
 
         # Build the computation graph for training
         train_zmean, train_zstddev = encoder(self.train_x, self.z_dim)
-        train_z = train_zmean + tf.multiply(train_zstddev,
+        self.train_z = train_zmean + tf.multiply(train_zstddev,
                                             tf.random_normal(tf.stack([tf.shape(self.train_x)[0], self.z_dim])))
-        train_xmean = decoder(train_z)
+        train_xmean = decoder(self.train_z)
 
         # Build the computation graph for generating samples
         self.gen_z = tf.placeholder(tf.float32, shape=[None, self.z_dim])
@@ -85,7 +85,7 @@ class VAE:
 
         # Compare the generated z with true samples from a standard Gaussian, and compute their MMD distance
         true_samples = tf.random_normal(tf.stack([self.batch_size, self.z_dim]))
-        self.loss_mmd = compute_mmd(true_samples, train_z)
+        self.loss_mmd = compute_mmd(true_samples, self.train_z)
 
         # ELBO loss divided by input dimensions
         elbo_per_sample = tf.reduce_sum(-tf.log(train_zstddev) + 0.5 * tf.square(train_zstddev) +
@@ -121,10 +121,12 @@ class VAE:
         self.ce_ph = tf.placeholder(tf.float32)
         self.norm1_ph = tf.placeholder(tf.float32)
         self.inception_ph = tf.placeholder(tf.float32)
+        self.zlogdet_ph = tf.placeholder(tf.float32)
         self.eval_summary = tf.summary.merge([
             tf.summary.scalar('class_ce', self.ce_ph),
             tf.summary.scalar('norm1', self.norm1_ph),
-            tf.summary.scalar('inception_score', self.inception_ph)
+            tf.summary.scalar('inception_score', self.inception_ph),
+            tf.summary.scalar('zlogdet', self.zlogdet_ph),
         ])
 
         self.train_nll_ph = tf.placeholder(tf.float32)
@@ -161,6 +163,21 @@ class VAE:
         plots = convert_to_display(samples_mean)
         misc.imsave(os.path.join(self.fig_path, 'samples%d.png' % save_idx), plots)
 
+    def compute_z_logdet(self, is_train=True):
+        z_list = []
+        for k in range(50):
+            if is_train:
+                batch_x = self.dataset.next_batch(self.batch_size)
+            else:
+                batch_x = self.dataset.next_test_batch(self.batch_size)
+            batch_x = np.reshape(batch_x, [-1] + x_dim)
+            z = self.sess.run(self.train_z, feed_dict={self.train_x: batch_x})
+            z_list.append(z)
+        z_list = np.concatenate(z_list, axis=0)
+        cov = np.cov(z_list.T)
+        sign, logdet = np.linalg.slogdet(cov)
+        return logdet
+
     def evaluate_inception(self):
         data_batches = []
         for i in range(20):
@@ -191,9 +208,10 @@ class VAE:
 
             if iter % 100 == 0:
                 class_dist, inception = self.evaluate_inception()
-                score_summary = self.sess.run(self.eval_summary, feed_dict={self.ce_ph: class_dist[0],
-                                                                       self.norm1_ph: class_dist[1],
-                                                                       self.inception_ph: inception})
+                zlogdet_val = self.compute_z_logdet(is_train=False)
+                score_summary = self.sess.run(self.eval_summary,
+                                              feed_dict={self.ce_ph: class_dist[0], self.norm1_ph: class_dist[1],
+                                                         self.inception_ph: inception, self.zlogdet_ph: zlogdet_val})
                 self.summary_writer.add_summary(score_summary, iter)
 
             bx = self.dataset.next_batch(self.batch_size)

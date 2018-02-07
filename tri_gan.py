@@ -13,7 +13,6 @@ from eval_inception import *
 from dataset import *
 
 parser = argparse.ArgumentParser()
-# python coco_transfer2.py --db_path=../data/coco/coco_seg_transfer40_30_299 --batch_size=64 --gpu='0' --type=mask
 
 parser.add_argument('-g', '--gpu', type=str, default='3', help='GPU to use')
 parser.add_argument('-n', '--netname', type=str, default='mnist', help='mnist or cifar')
